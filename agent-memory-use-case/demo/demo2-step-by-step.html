@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Demo 2 · Oracle Agent Memory — step-by-step</title>
+<style>
+  :root{
+    --ink:#0f172a; --muted:#64748b; --bg:#f8fafc;
+    --local:#6366f1; --llm:#f59e0b; --mem:#12805c; --oracle:#c74634;
+    --flat:#dc2626; --ret:#0ea5e9; --sql:#7c3aed;
+    --navy:#1b2a4a; --line:#e4e7ec; --ground:#f7f8fa;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0}
+  body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+    color:var(--ink);
+    background:
+      radial-gradient(1100px 520px at 85% -10%, #e8f6f0 0%, transparent 60%),
+      radial-gradient(900px 480px at -5% 115%, #eef2ff 0%, transparent 55%),
+      var(--bg);
+    padding:22px 18px 40px}
+  .wrap{max-width:1500px;margin:0 auto}
+  header{text-align:center;margin-bottom:8px}
+  .kicker{display:inline-flex;align-items:center;gap:8px;font-size:11.5px;font-weight:700;
+    letter-spacing:.14em;text-transform:uppercase;color:#fff;background:var(--mem);
+    padding:5px 13px;border-radius:999px;box-shadow:0 8px 20px -8px var(--mem)}
+  h1{font-size:28px;margin:12px 0 4px;font-weight:800;letter-spacing:-.02em}
+  h1 .grad{background:linear-gradient(90deg,var(--mem),var(--oracle));
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  .sub{color:var(--muted);font-size:14px;margin:0}
+
+  .stage{display:grid;grid-template-columns:380px 1fr;gap:24px;margin-top:10px;align-items:stretch}
+  .stage svg{width:100%;height:auto;display:block}
+
+  /* ---------- left architecture (cumulative reveal) ---------- */
+  [data-step]{transition:opacity .55s ease}
+  [data-step].off{opacity:0;pointer-events:none}
+  .box rect{fill:#fff;rx:14;filter:drop-shadow(0 10px 18px rgba(15,23,42,.12));stroke-width:2}
+  .box .t{font-size:15px;font-weight:800;fill:var(--ink);text-anchor:middle}
+  .box .s{font-size:11px;fill:var(--muted);text-anchor:middle}
+  .box .f{font-size:10.5px;font-weight:600;fill:#475569;font-family:var(--mono);text-anchor:middle}
+  .b-local rect{stroke:var(--local)} .b-mem rect{stroke:var(--mem)} .b-db rect{stroke:var(--oracle)}
+  .zone{fill:#fff;opacity:.55;stroke:var(--mem);stroke-width:1.5;stroke-dasharray:2 5;rx:20}
+  .zlabel{font-size:11.5px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;fill:var(--mem)}
+  .wire{fill:none;stroke-width:2.6;stroke-linecap:round;stroke-dasharray:8 8;animation:march 1s linear infinite}
+  .thin{stroke-width:1.8;stroke-dasharray:5 6}
+  @keyframes march{to{stroke-dashoffset:-16}}
+  .w-local{stroke:var(--local)} .w-mem{stroke:var(--mem)} .w-db{stroke:var(--oracle)} .w-ret{stroke:var(--ret)}
+  .pkt{filter:drop-shadow(0 0 4px currentColor)}
+  .p-local{fill:var(--local);color:var(--local)} .p-mem{fill:var(--mem);color:var(--mem)}
+  .p-db{fill:var(--oracle);color:var(--oracle)} .p-ret{fill:var(--ret);color:var(--ret)}
+  .lbl{font-size:11px;font-weight:700;fill:#334155;paint-order:stroke;stroke:#fff;stroke-width:3.4px;
+    stroke-linejoin:round;text-anchor:middle}
+
+  /* ---------- right concept stage (one panel per step) ---------- */
+  #concepts{position:relative;min-height:640px}
+  .panel-step{display:none}
+  .panel-step.cur{display:block}
+  .panel-step > *{opacity:0;transform:translateY(20px) scale(.94);
+    animation:popin .55s cubic-bezier(.2,1.3,.3,1) forwards}
+  .panel-step > *:nth-child(1){animation-delay:.05s}
+  .panel-step > *:nth-child(2){animation-delay:.35s}
+  .panel-step > *:nth-child(3){animation-delay:.65s}
+  .panel-step > *:nth-child(4){animation-delay:.95s}
+  .panel-step > *:nth-child(5){animation-delay:1.25s}
+  .panel-step > *:nth-child(6){animation-delay:1.55s}
+  @keyframes popin{to{opacity:1;transform:none}}
+
+  .sticker{display:inline-block;font-weight:900;background:#fff;border-radius:18px;
+    padding:16px 28px;font-size:32px;box-shadow:0 16px 36px rgba(15,23,42,.16);
+    border:3px solid var(--ink)}
+  .sticker.green{border-color:var(--mem);color:var(--mem)}
+  .sticker.red{border-color:var(--flat);color:var(--flat)}
+  .sticker.amber{border-color:var(--llm);color:#b45309}
+  .sticker.navy{border-color:var(--navy);color:var(--navy)}
+  .sticker.purple{border-color:var(--sql);color:var(--sql)}
+  .tl{transform:rotate(-2deg)!important} .tr{transform:rotate(1.8deg)!important}
+  .panel-step > .tl{animation-name:popin-tl}
+  .panel-step > .tr{animation-name:popin-tr}
+  @keyframes popin-tl{to{opacity:1;transform:rotate(-2deg)}}
+  @keyframes popin-tr{to{opacity:1;transform:rotate(1.8deg)}}
+
+  .bigrow{display:flex;gap:16px;flex-wrap:wrap;align-items:center}
+  .pill{display:inline-flex;align-items:center;gap:10px;font-size:24px;font-weight:800;
+    background:#e8f6f0;color:#065f46;border-radius:999px;padding:12px 26px;
+    box-shadow:0 8px 20px rgba(18,128,92,.15)}
+  .pill.gray{background:#f2f4f7;color:#475467}
+  .pill.new{background:#fdf0ee;color:#9a3412}
+
+  .jobs{display:flex;gap:18px;margin-top:26px}
+  .job{flex:1;background:#fff;border:2.5px solid var(--mem);border-radius:20px;
+    padding:26px 20px;text-align:center;box-shadow:0 12px 28px rgba(15,23,42,.1)}
+  .job .ico{font-size:44px}
+  .job .jt{font-size:28px;font-weight:900;color:var(--mem);margin-top:8px;letter-spacing:.02em}
+  .job .jd{font-size:15px;color:var(--muted);margin-top:6px;font-weight:600;line-height:1.4}
+
+  .rowcard{background:#fff;border:1.5px solid var(--line);border-radius:12px;
+    padding:14px 20px;font-family:var(--mono);font-size:17px;font-weight:600;color:#334155;
+    box-shadow:0 6px 16px rgba(15,23,42,.07);margin-bottom:10px;display:flex;
+    justify-content:space-between;align-items:center;max-width:640px}
+  .rowcard .tag{font-size:11px;font-weight:800;letter-spacing:.05em;border-radius:999px;
+    padding:4px 12px;background:#eef4ff;color:#1849a9;font-family:'Inter',sans-serif}
+
+  .fact{background:#fff;border-left:6px solid var(--mem);border-radius:14px;
+    padding:18px 24px;box-shadow:0 10px 26px rgba(15,23,42,.1);margin-bottom:14px;max-width:620px}
+  .fact .ft{font-size:12px;font-weight:900;letter-spacing:.08em;color:var(--mem)}
+  .fact .fc{font-size:24px;font-weight:800;margin-top:4px}
+  .fact .scopes{margin-top:10px;display:flex;gap:8px;flex-wrap:wrap}
+  .chip{font-family:var(--mono);font-size:12.5px;background:var(--ground);
+    border:1px solid var(--line);border-radius:999px;padding:4px 12px;color:#475467}
+
+  .cheat{background:#fffbeb;border:2.5px solid var(--llm);border-radius:18px;
+    padding:24px 30px;max-width:560px;box-shadow:0 14px 32px rgba(180,83,9,.15)}
+  .cheat h3{font-size:24px;font-weight:900;color:#92400e}
+  .cheat ul{margin:14px 0 0 0;padding-left:22px;font-size:19px;font-weight:600;line-height:1.7}
+  .cheat .tk{margin-top:14px;font-size:15px;font-weight:800;color:#b45309}
+
+  .flatbars{display:flex;align-items:flex-end;gap:8px;height:150px;margin-top:8px}
+  .fb{width:38px;height:52px;border-radius:7px 7px 0 0;
+    background:linear-gradient(to top,#0e9f6e,#34d399)}
+  .flatlbl{font-size:20px;font-weight:900;color:var(--mem);margin-top:10px}
+
+  .term{background:#101828;border-radius:16px;padding:24px 28px;max-width:660px;
+    font-family:var(--mono);font-size:18px;line-height:1.8;color:#e4e7ec;
+    box-shadow:0 18px 40px rgba(15,23,42,.35)}
+  .term .cmd{color:#7dd3fc}
+  .term .win{color:#6ee7b7}
+  .term .hl{color:#fbbf24}
+
+  .score{display:flex;gap:20px;max-width:720px}
+  .scard{flex:1;border-radius:18px;padding:24px 26px;box-shadow:0 12px 30px rgba(15,23,42,.12)}
+  .scard.bad{background:#fdf0ee;border:2.5px solid var(--flat)}
+  .scard.good{background:#e8f6f0;border:2.5px solid var(--mem)}
+  .scard .sn{font-size:52px;font-weight:900;letter-spacing:-.02em}
+  .scard.bad .sn{color:var(--flat)} .scard.good .sn{color:var(--mem)}
+  .scard .sl{font-size:16px;font-weight:700;color:#475467;margin-top:4px;line-height:1.4}
+  .quote{background:#fff;border:1.5px solid var(--line);border-radius:16px;padding:18px 26px;
+    font-size:22px;font-weight:700;max-width:720px;box-shadow:0 10px 26px rgba(15,23,42,.08)}
+  .quote b{color:var(--mem)}
+
+  /* ---------- stepper ---------- */
+  .stepper{display:flex;align-items:center;justify-content:center;gap:14px;margin-top:14px}
+  .stepper button{font:inherit;font-weight:800;font-size:15px;border:none;border-radius:999px;
+    padding:8px 18px;cursor:pointer;background:var(--mem);color:#fff;box-shadow:0 6px 14px -6px var(--mem)}
+  .stepper button:disabled{opacity:.35;cursor:default}
+  #stepLabel{font-size:14.5px;font-weight:800;min-width:360px;text-align:center}
+  #stepLabel small{display:block;font-weight:600;color:var(--muted);font-size:11.5px;margin-top:2px}
+  .hint{text-align:center;color:var(--muted);font-size:11px;margin-top:6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <span class="kicker">🟢 DEMO 2 · ORACLE AGENT MEMORY</span>
+  <h1>Same conversation — <span class="grad">the history moves into the database</span></h1>
+  <p class="sub">Three jobs: store the chat · distill the facts · find them when needed.</p>
+</header>
+
+<div class="stage">
+  <!-- ================= LEFT: architecture spine ================= -->
+  <svg viewBox="0 0 380 640" xmlns="http://www.w3.org/2000/svg">
+    <defs><marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#94a3b8"/></marker></defs>
+    <rect class="zone" x="14" y="10" width="352" height="620"/>
+    <text class="zlabel" x="34" y="36">💻 Your Mac · live-demo/</text>
+
+    <g data-step="0" class="box b-local">
+      <rect x="85" y="52" width="210" height="80"/>
+      <text class="t" x="190" y="84">🎬 The SAME script</text>
+      <text class="s" x="190" y="102">the 12 Tokyo questions</text>
+      <text class="f" x="190" y="120">conversation.py</text>
+    </g>
+
+    <g data-step="1">
+      <path id="w1" class="wire thin w-local" d="M190,132 L190,166" marker-end="url(#ah)"/>
+      <circle r="4" class="pkt p-local"><animateMotion dur="1.4s" repeatCount="indefinite"><mpath href="#w1"/></animateMotion></circle>
+      <g class="box b-mem">
+        <rect x="85" y="170" width="210" height="80"/>
+        <text class="t" x="190" y="202">🟢 Memory runner</text>
+        <text class="s" x="190" y="220">chat is NOT the prompt</text>
+        <text class="f" x="190" y="238">demo2_agent_memory.py</text>
+      </g>
+    </g>
+
+    <g data-step="2">
+      <path id="w2" class="wire w-mem" d="M190,250 L190,284" marker-end="url(#ah)"/>
+      <circle r="4" class="pkt p-mem"><animateMotion dur="1.3s" repeatCount="indefinite"><mpath href="#w2"/></animateMotion></circle>
+      <g class="box b-mem">
+        <rect x="85" y="288" width="210" height="94"/>
+        <text class="t" x="190" y="318">📦 Memory layer</text>
+        <text class="s" x="190" y="336">store · distill · find</text>
+        <text class="f" x="190" y="354">pip install oracleagentmemory</text>
+        <text class="f" x="190" y="370">scope: user · agent · thread</text>
+      </g>
+    </g>
+
+    <g data-step="3">
+      <path id="w3" class="wire w-db" d="M170,382 C150,420 150,450 170,486" marker-end="url(#ah)"/>
+      <circle r="5" class="pkt p-db"><animateMotion dur="1.5s" repeatCount="indefinite"><mpath href="#w3"/></animateMotion></circle>
+      <circle r="5" class="pkt p-db"><animateMotion dur="1.5s" begin="0.5s" repeatCount="indefinite"><mpath href="#w3"/></animateMotion></circle>
+      <text class="lbl" x="98" y="438" transform="rotate(-90 98 438)">rows in</text>
+      <g class="box b-db">
+        <rect x="85" y="490" width="210" height="92"/>
+        <text class="t" x="190" y="522">🗄 Oracle AI Database</text>
+        <text class="s" x="190" y="540">MESSAGE · MEMORY · vectors</text>
+        <text class="f" x="190" y="558">docker: oracle26ai · free</text>
+      </g>
+    </g>
+
+    <g data-step="5">
+      <path id="w4" class="wire w-ret" d="M212,486 C232,450 232,420 212,382" marker-end="url(#ah)"/>
+      <circle r="5" class="pkt p-ret"><animateMotion dur="1.5s" repeatCount="indefinite"><mpath href="#w4"/></animateMotion></circle>
+      <text class="lbl" x="286" y="438" transform="rotate(90 286 438)">cheat-sheet out</text>
+    </g>
+  </svg>
+
+  <!-- ================= RIGHT: concept stage (one panel per step) ================= -->
+  <div id="concepts">
+
+    <!-- STEP 1 · same experiment, new ingredient -->
+    <div class="panel-step" data-panel="0">
+      <div><span class="sticker navy tl" style="font-size:44px">SAME 12 QUESTIONS</span></div>
+      <div class="bigrow" style="margin-top:26px">
+        <span class="pill gray">✓ same questions</span>
+        <span class="pill gray">✓ same model</span>
+      </div>
+      <div style="margin-top:26px"><span class="sticker green tr" style="font-size:40px">NEW: a database that remembers 🗄</span></div>
+    </div>
+
+    <!-- STEP 2 · the memory runner -->
+    <div class="panel-step" data-panel="1">
+      <div><span class="sticker red tl">prompt = whole chat ❌</span></div>
+      <div style="margin-top:24px"><span class="sticker green tr" style="font-size:40px">every message → MEMORY LAYER ✅</span></div>
+      <div class="quote" style="margin-top:26px">The chat doesn't live in the prompt anymore. It lives <b>next to</b> the model — managed.</div>
+    </div>
+
+    <!-- STEP 3 · three jobs -->
+    <div class="panel-step" data-panel="2">
+      <div><span class="sticker navy tl">📦 oracleagentmemory · one pip install</span></div>
+      <div class="jobs">
+        <div class="job"><div class="ico">📥</div><div class="jt">STORE</div>
+          <div class="jd">keep every message<br>as a database row</div></div>
+        <div class="job"><div class="ico">🧪</div><div class="jt">DISTILL</div>
+          <div class="jd">extract only the facts<br>worth remembering</div></div>
+        <div class="job"><div class="ico">🔎</div><div class="jt">FIND</div>
+          <div class="jd">fetch the right facts<br>when you ask</div></div>
+      </div>
+    </div>
+
+    <!-- STEP 4 · job one: store -->
+    <div class="panel-step" data-panel="3">
+      <div><span class="sticker green tl">📥 JOB 1 — STORE</span></div>
+      <div style="margin-top:22px">
+        <div class="rowcard"><span>"Hi! I'm planning a 5-day Tokyo trip…"</span><span class="tag">MESSAGE ROW 1</span></div>
+      </div>
+      <div><div class="rowcard"><span>"Great! November is beautiful…"</span><span class="tag">MESSAGE ROW 2</span></div></div>
+      <div><div class="rowcard"><span>"Which neighborhoods should I…"</span><span class="tag">MESSAGE ROW 3</span></div></div>
+      <div class="bigrow" style="margin-top:18px">
+        <span class="pill">nothing lost ✓</span>
+        <span class="pill new">nothing re-sent ✓</span>
+      </div>
+    </div>
+
+    <!-- STEP 5 · job two: distill -->
+    <div class="panel-step" data-panel="4">
+      <div><span class="sticker green tl">🧪 JOB 2 — DISTILL</span></div>
+      <div style="margin-top:20px">
+        <div class="fact"><div class="ft">PREFERENCE</div><div class="fc">"User is vegetarian"</div>
+          <div class="scopes"><span class="chip">user_id: rahul_17</span><span class="chip">all threads</span></div></div>
+      </div>
+      <div><div class="fact"><div class="ft">FACT</div><div class="fc">"Ankita is allergic to peanuts"</div>
+        <div class="scopes"><span class="chip">user_id: rahul_17</span><span class="chip">thread: tokyo_trip</span></div></div></div>
+      <div><div class="fact"><div class="ft">PREFERENCE</div><div class="fc">"Prefers window seats"</div>
+        <div class="scopes"><span class="chip">user_id: rahul_17</span><span class="chip">agent: travel_bot</span></div></div></div>
+      <div><span class="sticker amber tr" style="font-size:24px">a second AI reads the chat — keeps ONLY these · labeled: whose it is</span></div>
+    </div>
+
+    <!-- STEP 6 · job three: find — cheat-sheet -->
+    <div class="panel-step" data-panel="5">
+      <div><span class="sticker green tl">🔎 JOB 3 — FIND</span></div>
+      <div style="margin-top:22px">
+        <div class="cheat">
+          <h3>🗒 The cheat-sheet</h3>
+          <ul><li>vegetarian · window seats</li><li>Ankita — peanut allergy</li>
+            <li>Tokyo, November, ~$2,000</li><li>what we're doing right now</li></ul>
+          <div class="tk">≈ 350 tokens. That's it.</div>
+        </div>
+      </div>
+      <div style="margin-top:20px"><span class="sticker navy tr" style="font-size:24px">built fresh for every question — just the facts that matter</span></div>
+    </div>
+
+    <!-- STEP 7 · the bounded prompt -->
+    <div class="panel-step" data-panel="6">
+      <div><span class="sticker green tl" style="font-size:38px">model sees: cheat-sheet + question. NOTHING else.</span></div>
+      <div style="margin-top:26px">
+        <div class="flatbars">
+          <div class="fb"></div><div class="fb"></div><div class="fb"></div><div class="fb"></div>
+          <div class="fb"></div><div class="fb"></div><div class="fb"></div><div class="fb"></div>
+          <div class="fb"></div><div class="fb"></div><div class="fb"></div><div class="fb"></div>
+        </div>
+        <div class="flatlbl">≈ 500 tokens · turn 1 → turn 12 · FLAT ✅</div>
+      </div>
+      <div style="margin-top:20px"><span class="sticker navy tr" style="font-size:26px">nobody re-reads anything</span></div>
+    </div>
+
+    <!-- STEP 8 · the reveal: rows -->
+    <div class="panel-step" data-panel="7">
+      <div><span class="sticker purple tl" style="font-size:34px">"Memory updated" = a DATABASE WRITE</span></div>
+      <div style="margin-top:22px">
+        <div class="term">
+          <span class="cmd">SQL&gt;</span> SELECT memory_type, content FROM MEMORY;<br><br>
+          <span class="win">PREFERENCE</span>  "User prefers <span class="hl">window seats</span>"<br>
+          <span class="win">FACT</span>        "<span class="hl">Ankita</span> is allergic to peanuts"<br>
+          <span class="win">PREFERENCE</span>  "User is vegetarian"
+        </div>
+      </div>
+      <div style="margin-top:20px"><span class="sticker navy tr" style="font-size:26px">not magic. ROWS. 🗄</span></div>
+    </div>
+
+    <!-- STEP 9 · the score -->
+    <div class="panel-step" data-panel="8">
+      <div class="score">
+        <div class="scard bad"><div class="sn">1,433</div>
+          <div class="sl">flat history · per message<br>— and climbing 📈</div></div>
+        <div class="scard good"><div class="sn">≈ 500</div>
+          <div class="sl">with memory · per message<br>— flat, forever ✅</div></div>
+      </div>
+      <div style="margin-top:22px"><span class="sticker green tl" style="font-size:34px">almost 3× cheaper — gap grows every turn</span></div>
+      <div style="margin-top:22px">
+        <div class="quote">Turn 12 — "which seat should you book me?" →<br>
+          <b>"I'll book a window seat, as per your preference."</b> It remembered. 🎯</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="stepper">
+  <button id="prev">‹ Prev</button>
+  <div id="stepLabel"></div>
+  <button id="next">Next ›</button>
+</div>
+<div class="hint">← / → arrow keys · full-screen &amp; screen-record while you narrate</div>
+</div>
+
+<script>
+const steps = [
+  {t:"Same experiment, new ingredient", d:"same 12 questions, same model — plus a database that remembers"},
+  {t:"The memory runner", d:"the chat is handed to a memory layer, not stuffed into the prompt"},
+  {t:"The memory layer — three jobs", d:"store the chat · distill the facts · find them when needed"},
+  {t:"Job 1 — STORE", d:"every message becomes a row; nothing lost, nothing re-sent"},
+  {t:"Job 2 — DISTILL", d:"a second AI keeps only the facts worth remembering — labeled"},
+  {t:"Job 3 — FIND: the cheat-sheet", d:"a tiny card of relevant facts, ≈350 tokens"},
+  {t:"The bounded prompt", d:"cheat-sheet + question — ≈500 tokens, flat for all 12 turns"},
+  {t:"The reveal — it's just rows", d:"'Memory updated' is a database write; plain SQL shows it"},
+  {t:"The score", d:"1,433 climbing vs ≈500 flat — and turn-12 recall: window seat"},
+];
+let cur = 0;
+const prev = document.getElementById('prev'), next = document.getElementById('next'),
+      label = document.getElementById('stepLabel');
+function apply(){
+  document.querySelectorAll('[data-step]').forEach(el=>{
+    el.classList.toggle('off', +el.dataset.step > cur);
+  });
+  document.querySelectorAll('.panel-step').forEach(p=>{
+    const on = +p.dataset.panel === cur;
+    if(on && !p.classList.contains('cur')){
+      p.classList.add('cur');
+      // restart the stagger animation
+      [...p.children].forEach(c=>{c.style.animation='none'; void c.offsetWidth; c.style.animation='';});
+    } else if(!on) p.classList.remove('cur');
+  });
+  label.innerHTML = `Step ${cur+1} / ${steps.length} — ${steps[cur].t}<small>${steps[cur].d}</small>`;
+  prev.disabled = cur === 0; next.disabled = cur === steps.length-1;
+}
+prev.onclick = ()=>{ if(cur>0){cur--;apply();} };
+next.onclick = ()=>{ if(cur<steps.length-1){cur++;apply();} };
+document.addEventListener('keydown', e=>{
+  if(e.key==='ArrowRight') next.onclick();
+  if(e.key==='ArrowLeft') prev.onclick();
+});
+apply();
+</script>
+</body>
+</html>

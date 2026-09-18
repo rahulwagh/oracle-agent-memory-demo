@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Code Walkthrough — step-by-step</title>
+<style>
+  :root{
+    --ink:#0f172a; --muted:#64748b; --bg:#f8fafc;
+    --local:#6366f1; --llm:#f59e0b; --mem:#12805c; --oracle:#c74634;
+    --flat:#dc2626; --sql:#7c3aed; --navy:#1b2a4a; --line:#e4e7ec; --ground:#f7f8fa;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0}
+  body{font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+    color:var(--ink);
+    background:
+      radial-gradient(1100px 520px at 85% -10%, #eef2ff 0%, transparent 60%),
+      radial-gradient(900px 480px at -5% 115%, #e8f6f0 0%, transparent 55%),
+      var(--bg);
+    padding:22px 18px 40px}
+  .wrap{max-width:1500px;margin:0 auto}
+  header{text-align:center;margin-bottom:8px}
+  .kicker{display:inline-flex;align-items:center;gap:8px;font-size:11.5px;font-weight:700;
+    letter-spacing:.14em;text-transform:uppercase;color:#fff;background:var(--navy);
+    padding:5px 13px;border-radius:999px;box-shadow:0 8px 20px -8px var(--navy)}
+  h1{font-size:28px;margin:12px 0 4px;font-weight:800;letter-spacing:-.02em}
+  h1 .grad{background:linear-gradient(90deg,var(--navy),var(--mem));
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  .sub{color:var(--muted);font-size:14px;margin:0}
+
+  .stage{display:grid;grid-template-columns:330px 1fr;gap:24px;margin-top:12px;align-items:start}
+
+  /* ---------- left rail: file tree + jobs map ---------- */
+  .rail{background:#fff;border:1px solid var(--line);border-radius:18px;padding:20px 18px;
+    box-shadow:0 8px 24px rgba(15,23,42,.07)}
+  .rail h3{font-size:11.5px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;
+    color:var(--muted);margin-bottom:12px}
+  .file{display:flex;align-items:center;gap:10px;font-family:var(--mono);font-size:14px;
+    padding:9px 13px;border-radius:10px;color:#475467;border:1.5px solid transparent;
+    margin-bottom:5px;transition:.35s}
+  .file.cur{background:#eef4ff;border-color:var(--local);color:#1849a9;font-weight:700;
+    transform:translateX(4px)}
+  .file.term-cur{background:#101828;color:#7dd3fc;border-color:#101828;font-weight:700;
+    transform:translateX(4px)}
+  .jobsmap{margin-top:22px;display:flex;flex-direction:column;gap:8px}
+  .jm{display:flex;align-items:center;gap:12px;font-size:15px;font-weight:800;color:#98a2b3;
+    padding:10px 14px;border-radius:12px;border:2px solid var(--line);transition:.35s}
+  .jm.cur{color:var(--mem);border-color:var(--mem);background:#e8f6f0;transform:scale(1.03)}
+  .jm.done{color:var(--mem);border-color:#b7e0cd}
+  .jm code{font-family:var(--mono);font-size:12px;font-weight:600;margin-left:auto;color:inherit}
+
+  /* ---------- right content panels ---------- */
+  #concepts{position:relative;min-height:600px}
+  .panel-step{display:none}
+  .panel-step.cur{display:block}
+  .panel-step > *{opacity:0;transform:translateY(20px) scale(.95);
+    animation:popin .5s cubic-bezier(.2,1.3,.3,1) forwards}
+  .panel-step > *:nth-child(1){animation-delay:.05s}
+  .panel-step > *:nth-child(2){animation-delay:.4s}
+  .panel-step > *:nth-child(3){animation-delay:.75s}
+  .panel-step > *:nth-child(4){animation-delay:1.1s}
+  .panel-step > *:nth-child(5){animation-delay:1.45s}
+  @keyframes popin{to{opacity:1;transform:none}}
+
+  .sticker{display:inline-block;font-weight:900;background:#fff;border-radius:16px;
+    padding:14px 26px;font-size:28px;box-shadow:0 14px 32px rgba(15,23,42,.15);
+    border:3px solid var(--ink)}
+  .sticker.green{border-color:var(--mem);color:var(--mem)}
+  .sticker.red{border-color:var(--flat);color:var(--flat)}
+  .sticker.amber{border-color:var(--llm);color:#b45309}
+  .sticker.navy{border-color:var(--navy);color:var(--navy)}
+  .sticker.purple{border-color:var(--sql);color:var(--sql)}
+  .tl{transform:rotate(-1.8deg)!important} .tr{transform:rotate(1.6deg)!important}
+  .panel-step > .tl{animation-name:popin-tl} .panel-step > .tr{animation-name:popin-tr}
+  @keyframes popin-tl{to{opacity:1;transform:rotate(-1.8deg)}}
+  @keyframes popin-tr{to{opacity:1;transform:rotate(1.6deg)}}
+
+  .code{background:#0f172a;border-radius:16px;padding:22px 28px;max-width:880px;
+    font-family:var(--mono);font-size:16.5px;line-height:1.85;color:#94a3b8;
+    box-shadow:0 18px 40px rgba(15,23,42,.35);overflow-x:auto;white-space:pre}
+  .code .fn{color:#7dd3fc} .code .str{color:#fbbf24} .code .kw{color:#c4b5fd}
+  .code .cm{color:#64748b;font-style:italic}
+  .code .hl{display:inline-block;background:#3b2f14;color:#fde68a;border-left:4px solid var(--llm);
+    margin-left:-28px;padding-left:24px;width:calc(100% + 56px);font-weight:700}
+  .code .hlr{display:inline-block;background:#3b1214;color:#fecaca;border-left:4px solid var(--flat);
+    margin-left:-28px;padding-left:24px;width:calc(100% + 56px);font-weight:700}
+  .codechip{display:inline-block;font-family:var(--mono);font-size:13px;font-weight:700;
+    background:#eef4ff;color:#1849a9;border:1px solid #d6e4ff;border-radius:999px;
+    padding:5px 14px;margin-bottom:12px}
+
+  .policy{background:#fffbeb;border:2.5px solid var(--llm);border-radius:18px;
+    padding:26px 32px;max-width:760px;box-shadow:0 14px 32px rgba(180,83,9,.15);
+    font-size:20px;line-height:1.75;font-weight:600;color:#451a03}
+  .policy b{background:#fde68a;padding:1px 7px;border-radius:6px}
+  .policy .head{font-family:var(--mono);font-size:14px;font-weight:700;color:#92400e;
+    margin-bottom:12px}
+
+  .quotecard{background:#fff;border:1.5px solid var(--line);border-radius:18px;
+    padding:26px 32px;max-width:760px;font-size:27px;font-weight:800;line-height:1.5;
+    box-shadow:0 12px 30px rgba(15,23,42,.1)}
+  .quotecard b.db{color:var(--oracle)} .quotecard b.llm{color:#b45309}
+
+  .pillrow{display:flex;gap:14px;flex-wrap:wrap}
+  .pill{display:inline-flex;align-items:center;gap:10px;font-size:22px;font-weight:800;
+    background:#e8f6f0;color:#065f46;border-radius:999px;padding:11px 24px;
+    box-shadow:0 8px 20px rgba(18,128,92,.15)}
+  .pill.gray{background:#f2f4f7;color:#475467}
+  .pill.red{background:#fdf0ee;color:#9a3412}
+  .pill.navy{background:#eef2ff;color:#3730a3}
+
+  .score{display:flex;gap:20px;max-width:720px}
+  .scard{flex:1;border-radius:18px;padding:22px 26px;box-shadow:0 12px 30px rgba(15,23,42,.12)}
+  .scard.bad{background:#fdf0ee;border:2.5px solid var(--flat)}
+  .scard.good{background:#e8f6f0;border:2.5px solid var(--mem)}
+  .scard .sn{font-size:50px;font-weight:900;letter-spacing:-.02em}
+  .scard.bad .sn{color:var(--flat)} .scard.good .sn{color:var(--mem)}
+  .scard .sl{font-size:15.5px;font-weight:700;color:#475467;margin-top:4px;line-height:1.4}
+
+  .gap{margin-top:22px}
+
+  /* ---------- stepper ---------- */
+  .stepper{display:flex;align-items:center;justify-content:center;gap:14px;margin-top:16px}
+  .stepper button{font:inherit;font-weight:800;font-size:15px;border:none;border-radius:999px;
+    padding:8px 18px;cursor:pointer;background:var(--navy);color:#fff;box-shadow:0 6px 14px -6px var(--navy)}
+  .stepper button:disabled{opacity:.35;cursor:default}
+  #stepLabel{font-size:14.5px;font-weight:800;min-width:380px;text-align:center}
+  #stepLabel small{display:block;font-weight:600;color:var(--muted);font-size:11.5px;margin-top:2px}
+  .hint{text-align:center;color:var(--muted);font-size:11px;margin-top:6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <span class="kicker">⌨️ CODE WALKTHROUGH · 5 FILES</span>
+  <h1>The whole thing is <span class="grad">three calls</span></h1>
+  <p class="sub">store → add_messages · distill → a plain-English policy · find → get_context_card</p>
+</header>
+
+<div class="stage">
+  <!-- ================= LEFT RAIL ================= -->
+  <div class="rail">
+    <h3>📁 live-demo/</h3>
+    <div class="file" id="f-conv">🎬 conversation.py</div>
+    <div class="file" id="f-d1">🔴 demo1_flat_history.py</div>
+    <div class="file" id="f-d2">🟢 demo2_agent_memory.py</div>
+    <div class="file" id="f-show">🔍 show_memories.py</div>
+    <div class="file" id="f-plot">📉 plot_comparison.py</div>
+    <h3 style="margin-top:22px">the three jobs</h3>
+    <div class="jobsmap">
+      <div class="jm" id="j-store">📥 STORE <code>add_messages()</code></div>
+      <div class="jm" id="j-distill">🧪 DISTILL <code>policy →</code></div>
+      <div class="jm" id="j-find">🔎 FIND <code>get_context_card()</code></div>
+    </div>
+  </div>
+
+  <!-- ================= RIGHT PANELS ================= -->
+  <div id="concepts">
+
+    <!-- S1 · the whole project -->
+    <div class="panel-step" data-panel="0">
+      <div><span class="sticker navy tl" style="font-size:38px">5 small files. That's the whole project.</span></div>
+      <div class="pillrow gap">
+        <span class="pill">💻 runs on my Mac</span>
+        <span class="pill">🗄 free Oracle DB · Docker</span>
+        <span class="pill">🦙 Llama · Ollama</span>
+      </div>
+      <div class="pillrow gap">
+        <span class="pill red">no cloud</span>
+        <span class="pill red">no API keys</span>
+        <span class="pill navy">⭐ GitHub — link below</span>
+      </div>
+    </div>
+
+    <!-- S2 · the fair test -->
+    <div class="panel-step" data-panel="1">
+      <div><span class="codechip">conversation.py</span></div>
+      <div class="code">SCRIPT = [
+    <span class="str">"Hi! I'm planning a 5-day Tokyo trip… I'm vegetarian,</span>
+    <span class="str"> and I always prefer window seats…"</span>,
+    <span class="str">"Which neighborhoods should I consider staying in?"</span>,
+    <span class="cm">… 8 more …</span>
+    <span class="str">"Quick check — what food restrictions do Ankita and I have?"</span>,
+    <span class="str">"Perfect. And which seat should you pick for my flight home?"</span>,
+]</div>
+      <div class="gap"><span class="sticker green tr" style="font-size:24px">both demos import THIS list — that's the fair test</span></div>
+    </div>
+
+    <!-- S3 · demo 1 is four lines -->
+    <div class="panel-step" data-panel="2">
+      <div><span class="codechip">demo1_flat_history.py</span></div>
+      <div class="code"><span class="kw">for</span> turn, question <span class="kw">in</span> enumerate(SCRIPT, start=<span class="str">1</span>):
+    history.append({<span class="str">"role"</span>: <span class="str">"user"</span>, <span class="str">"content"</span>: question})
+
+    tokens = payload_tokens(history)   <span class="cm"># what THIS request costs</span>
+
+<span class="hlr">    answer = chat(history)             # ← the ENTIRE list. every turn.</span>
+
+    history.append({<span class="str">"role"</span>: <span class="str">"assistant"</span>, <span class="str">"content"</span>: answer})</div>
+      <div class="gap"><span class="sticker red tl" style="font-size:30px">this ONE argument is the whole problem</span></div>
+      <div class="gap"><span class="pill red">64 tk → 1,433 tk 📈</span></div>
+    </div>
+
+    <!-- S4 · the memory client -->
+    <div class="panel-step" data-panel="3">
+      <div><span class="codechip">demo2_agent_memory.py · build_memory()</span></div>
+      <div class="code"><span class="kw">return</span> <span class="fn">OracleAgentMemory</span>(
+<span class="hl">    connection=pool,                        # 1 · the database</span>
+<span class="hl">    embedder=Embedder(model=EMBED_MODEL),   # 2 · search by meaning</span>
+<span class="hl">    llm=Llm(model=CHAT_MODEL),              # 3 · the distiller</span>
+    schema_policy=SchemaPolicy.<span class="fn">CREATE_IF_NECESSARY</span>,
+    memory_extraction_config=MemoryExtractionConfig(…),
+)</div>
+      <div class="gap"><span class="sticker navy tr" style="font-size:26px">one object · three ingredients</span></div>
+      <div class="gap"><span class="pill">CREATE_IF_NECESSARY → builds its own tables. no migrations ✓</span></div>
+    </div>
+
+    <!-- S5 · STORE -->
+    <div class="panel-step" data-panel="4">
+      <div><span class="sticker green tl">📥 JOB 1 — STORE</span></div>
+      <div class="code gap">    <span class="cm"># my message → a row</span>
+<span class="hl">    thread.add_messages([Message(role="user", content=question)])</span>
+
+    <span class="cm"># the reply → a row</span>
+<span class="hl">    thread.add_messages([Message(role="assistant", content=answer)])</span></div>
+      <div class="gap"><span class="sticker navy tr" style="font-size:24px">one call = one row. that's the entire storage story.</span></div>
+    </div>
+
+    <!-- S6 · DISTILL: the policy -->
+    <div class="panel-step" data-panel="5">
+      <div><span class="sticker green tl">🧪 JOB 2 — DISTILL</span></div>
+      <div class="policy gap">
+        <div class="head">EXTRACTION_POLICY = """</div>
+        Extract only durable facts about the USER and their travel companions:
+        dietary restrictions, allergies, seating and travel preferences…
+        <b>Allergies are the highest-priority facts — record them exactly,
+        word for word.</b>
+        Attribute every fact to the correct person…
+        Ignore greetings and small talk.
+        <b>Never invent facts that were not stated.</b>
+        <div class="head">"""</div>
+      </div>
+      <div class="gap"><span class="sticker amber tr" style="font-size:26px">not code. a policy — in plain English 🤯</span></div>
+    </div>
+
+    <!-- S7 · FIND -->
+    <div class="panel-step" data-panel="6">
+      <div><span class="sticker green tl">🔎 JOB 3 — FIND</span></div>
+      <div class="code gap">    <span class="cm"># meaning-search + summary → the cheat-sheet</span>
+<span class="hl">    card = thread.get_context_card(max_recent_messages=2,</span>
+<span class="hl">                                   max_relevant_results=6)</span>
+
+    messages = [
+      {<span class="str">"role"</span>: <span class="str">"system"</span>, <span class="str">"content"</span>: SYSTEM + card.formatted_content},
+      {<span class="str">"role"</span>: <span class="str">"user"</span>,   <span class="str">"content"</span>: question},   <span class="cm"># ← that's ALL</span>
+    ]</div>
+      <div class="gap"><span class="pill">cheat-sheet + question ≈ 500 tokens · every turn ✅</span></div>
+    </div>
+
+    <!-- S8 · the reveal in code -->
+    <div class="panel-step" data-panel="7">
+      <div><span class="codechip" style="background:#101828;color:#7dd3fc;border-color:#101828">show_memories.py · terminal</span></div>
+      <div class="code"><span class="fn">SQL&gt;</span> SELECT memory_type, content FROM MEMORY;
+
+<span class="kw">PREFERENCE</span>  <span class="str">"User prefers window seats"</span>
+<span class="kw">FACT</span>        <span class="str">"Ankita is allergic to peanuts"</span>
+<span class="kw">PREFERENCE</span>  <span class="str">"User is vegetarian"</span></div>
+      <div class="gap"><span class="sticker purple tl" style="font-size:28px">plain SQL. there they are. ROWS. 🗄</span></div>
+    </div>
+
+    <!-- S9 · the honest part -->
+    <div class="panel-step" data-panel="8">
+      <div><span class="sticker amber tl">⚖️ the honest part</span></div>
+      <div class="quotecard gap">The memory <b class="db">lifecycle</b> is a <b class="db">database</b> problem.<br>
+        Memory <b class="llm">quality</b> is still an <b class="llm">LLM</b> problem.</div>
+      <div class="pillrow gap">
+        <span class="pill gray">8B model on a laptop → sometimes fumbles a fact</span>
+      </div>
+      <div class="pillrow">
+        <span class="pill navy">bigger model = better memory · CHAT_MODEL=… one env var</span>
+      </div>
+    </div>
+
+    <!-- S10 · two numbers -->
+    <div class="panel-step" data-panel="9">
+      <div><span class="sticker navy tl" style="font-size:36px">what did it buy us? TWO numbers.</span></div>
+      <div class="score gap">
+        <div class="scard bad"><div class="sn">1,433</div>
+          <div class="sl">flat history · per message<br>never stops climbing 📈</div></div>
+        <div class="scard good"><div class="sn">≈ 500</div>
+          <div class="sl">with memory · per message<br>never starts ✅</div></div>
+      </div>
+      <div class="pillrow gap">
+        <span class="pill red">at 80 turns (Oracle research): 14,000 vs 1,300 → 10×</span>
+      </div>
+      <div class="pillrow">
+        <span class="pill">quality: memory won 48 : 13 — with LESS context 🏆</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="stepper">
+  <button id="prev">‹ Prev</button>
+  <div id="stepLabel"></div>
+  <button id="next">Next ›</button>
+</div>
+<div class="hint">← / → arrow keys · full-screen &amp; screen-record while you narrate</div>
+</div>
+
+<script>
+const steps = [
+  {t:"S1 — Five small files", d:"the whole project: local, free, no API keys — GitHub link below", file:null, job:null},
+  {t:"S2 — The fair test", d:"both demos import the same 12-question list", file:'f-conv', job:null},
+  {t:"S3 — Demo 1 is four lines", d:"chat(history) — this one argument is the whole problem", file:'f-d1', job:null},
+  {t:"S4 — The memory client", d:"one object, three ingredients: database, embedder, LLM", file:'f-d2', job:null},
+  {t:"S5 — Job 1: STORE", d:"add_messages — one call, one row", file:'f-d2', job:'j-store'},
+  {t:"S6 — Job 2: DISTILL", d:"an extraction policy written in plain English", file:'f-d2', job:'j-distill'},
+  {t:"S7 — Job 3: FIND", d:"get_context_card → cheat-sheet + question ≈ 500 tk", file:'f-d2', job:'j-find'},
+  {t:"S8 — The reveal, in code", d:"plain SQL over the MEMORY table — rows", file:'f-show', job:null},
+  {t:"S9 — The honest part", d:"lifecycle = database problem · quality = LLM problem", file:'f-d2', job:null},
+  {t:"S10 — Two numbers", d:"1,433 vs ≈500 — and 10× at eighty turns", file:'f-plot', job:null},
+];
+const JOBS=['j-store','j-distill','j-find'];
+let cur = 0;
+const prev = document.getElementById('prev'), next = document.getElementById('next'),
+      label = document.getElementById('stepLabel');
+function apply(){
+  document.querySelectorAll('.panel-step').forEach(p=>{
+    const on = +p.dataset.panel === cur;
+    if(on && !p.classList.contains('cur')){
+      p.classList.add('cur');
+      [...p.children].forEach(c=>{c.style.animation='none'; void c.offsetWidth; c.style.animation='';});
+    } else if(!on) p.classList.remove('cur');
+  });
+  document.querySelectorAll('.file').forEach(f=>f.classList.remove('cur','term-cur'));
+  const st = steps[cur];
+  if(st.file){
+    const el = document.getElementById(st.file);
+    el.classList.add(st.file==='f-show' ? 'term-cur' : 'cur');
+  }
+  JOBS.forEach((id,i)=>{
+    const el=document.getElementById(id);
+    el.classList.remove('cur','done');
+    const jobStep = 4+i;                    // S5,S6,S7
+    if(cur === jobStep) el.classList.add('cur');
+    else if(cur > jobStep) el.classList.add('done');
+  });
+  label.innerHTML = `Step ${cur+1} / ${steps.length} — ${st.t}<small>${st.d}</small>`;
+  prev.disabled = cur === 0; next.disabled = cur === steps.length-1;
+}
+prev.onclick = ()=>{ if(cur>0){cur--;apply();} };
+next.onclick = ()=>{ if(cur<steps.length-1){cur++;apply();} };
+document.addEventListener('keydown', e=>{
+  if(e.key==='ArrowRight') next.onclick();
+  if(e.key==='ArrowLeft') prev.onclick();
+});
+apply();
+</script>
+</body>
+</html>

@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Memory Illusion — What Your AI Never Tells You</title>
+<style>
+  :root{
+    --ink:#101828;
+    --ink-2:#475467;
+    --ink-3:#98a2b3;
+    --paper:#ffffff;
+    --ground:#f7f8fa;
+    --line:#e4e7ec;
+    --accent:#c74634;          /* oracle-ish red, used sparingly */
+    --accent-soft:#fdf0ee;
+    --navy:#1b2a4a;
+    --blue:#2f6fed;
+    --blue-soft:#eef4ff;
+    --green:#12805c;
+    --green-soft:#e8f6f0;
+    --amber:#b54708;
+    --amber-soft:#fff4e5;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    font-family:var(--sans);color:var(--ink);background:var(--ground);
+    overflow:hidden;-webkit-font-smoothing:antialiased;
+  }
+
+  /* ---------- stage ---------- */
+  .stage{position:relative;width:100vw;height:100vh}
+  .scene{
+    position:absolute;inset:0;display:flex;flex-direction:column;
+    padding:56px 72px 80px;opacity:0;visibility:hidden;transform:translateY(14px);
+    transition:opacity .45s ease,transform .45s ease,visibility .45s;
+  }
+  .scene.active{opacity:1;visibility:visible;transform:none}
+
+  /* staged beats: elements with data-b appear when beat reached */
+  [data-b]{opacity:0;transform:translateY(16px);transition:opacity .55s ease,transform .55s ease}
+  [data-b].on{opacity:1;transform:none}
+
+  .kicker{
+    font-size:13px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--accent);margin-bottom:10px;
+  }
+  h1{font-size:52px;line-height:1.08;letter-spacing:-.02em;font-weight:800}
+  h2{font-size:36px;line-height:1.12;letter-spacing:-.015em;font-weight:800;margin-bottom:6px}
+  .sub{font-size:18px;color:var(--ink-2);max-width:840px;line-height:1.55}
+
+  .scene-head{margin-bottom:26px}
+
+  /* ---------- reveal banner ---------- */
+  .reveal{
+    margin-top:auto;align-self:center;
+    background:var(--navy);color:#fff;border-radius:14px;
+    padding:18px 30px;font-size:21px;font-weight:650;line-height:1.4;
+    box-shadow:0 12px 30px rgba(16,24,40,.18);max-width:1040px;text-align:center;
+  }
+  .reveal em{color:#ffd7cf;font-style:normal;font-weight:800}
+
+  /* ---------- HUD ---------- */
+  .hud{
+    position:fixed;left:0;right:0;bottom:0;height:52px;display:flex;align-items:center;
+    justify-content:center;gap:18px;background:linear-gradient(to top,rgba(247,248,250,.97),rgba(247,248,250,0));
+    z-index:50;transition:opacity .3s;
+  }
+  .hud.hidden{opacity:0;pointer-events:none}
+  .dots{display:flex;gap:8px}
+  .dot{width:9px;height:9px;border-radius:50%;background:#d0d5dd;cursor:pointer;transition:.25s}
+  .dot.cur{background:var(--accent);transform:scale(1.3)}
+  .hint{font-size:12px;color:var(--ink-3)}
+  .hint b{color:var(--ink-2)}
+
+  /* =========================================================
+     SCENE 0 — TITLE
+  ==========================================================*/
+  #s0{justify-content:center;align-items:center;text-align:center}
+  #s0 h1{font-size:72px;max-width:1100px}
+  #s0 .sub{margin-top:22px;font-size:22px}
+  .title-stats{display:flex;gap:16px;margin-top:44px}
+  .tchip{
+    background:var(--paper);border:1px solid var(--line);border-radius:999px;
+    padding:10px 22px;font-size:15px;font-weight:650;color:var(--ink-2);
+    box-shadow:0 2px 6px rgba(16,24,40,.05);
+  }
+  .tchip b{color:var(--accent);font-variant-numeric:tabular-nums}
+
+  /* =========================================================
+     SCENE 1 — CHAT X-RAY
+  ==========================================================*/
+  .xray{flex:1;display:grid;grid-template-columns:1fr 1.15fr;gap:28px;min-height:0}
+  .panel{
+    background:var(--paper);border:1px solid var(--line);border-radius:18px;
+    display:flex;flex-direction:column;overflow:hidden;
+    box-shadow:0 8px 24px rgba(16,24,40,.06);
+  }
+  .panel-head{
+    padding:14px 20px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;
+    font-size:14px;font-weight:700;color:var(--ink-2);flex:none;
+  }
+  .cam{display:flex;gap:6px}
+  .cam i{width:10px;height:10px;border-radius:50%;background:#e4e7ec;display:block}
+  .badge{
+    margin-left:auto;font-size:11.5px;font-weight:700;padding:4px 10px;border-radius:999px;
+    letter-spacing:.04em;
+  }
+  .badge.user-view{background:var(--green-soft);color:var(--green)}
+  .badge.xray-view{background:var(--accent-soft);color:var(--accent)}
+  .panel-body{flex:1;padding:18px 20px;overflow:hidden;display:flex;flex-direction:column;gap:12px}
+  #chat-body{justify-content:flex-end}
+
+  .bubble{max-width:82%;padding:11px 15px;border-radius:14px;font-size:15px;line-height:1.45;
+    opacity:0;transform:translateY(10px);transition:.4s ease}
+  .bubble.show{opacity:1;transform:none}
+  .bubble.u{align-self:flex-end;background:var(--navy);color:#fff;border-bottom-right-radius:4px}
+  .bubble.a{align-self:flex-start;background:var(--ground);border:1px solid var(--line);border-bottom-left-radius:4px}
+
+  /* payload panel */
+  .wire{font-family:var(--mono);font-size:12.5px}
+  .send-label{
+    font-size:12px;font-weight:800;letter-spacing:.08em;color:var(--accent);
+    display:flex;align-items:center;gap:8px;margin-bottom:2px;
+  }
+  .send-label .pulse{width:8px;height:8px;border-radius:50%;background:var(--accent);
+    animation:pulse 1.2s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(199,70,52,.5)}70%{box-shadow:0 0 0 8px rgba(199,70,52,0)}100%{box-shadow:0 0 0 0 rgba(199,70,52,0)}}
+  .payload{flex:1;display:flex;flex-direction:column;gap:6px;overflow:hidden;justify-content:flex-end}
+  .pblock{
+    border-radius:8px;padding:7px 12px;font-family:var(--mono);font-size:12px;
+    display:flex;justify-content:space-between;align-items:center;gap:10px;
+    opacity:0;transform:translateX(24px);transition:opacity .3s,transform .3s;
+    border:1px solid transparent;flex:none;
+  }
+  .pblock.in{opacity:1;transform:none}
+  .pblock.sys{background:#f2f4f7;color:var(--ink-2);border-color:var(--line)}
+  .pblock.pu{background:var(--blue-soft);color:#1849a9;border-color:#d6e4ff}
+  .pblock.pa{background:var(--ground);color:var(--ink-2);border-color:var(--line)}
+  .pblock .resend{
+    font-size:10px;font-weight:800;color:var(--accent);background:var(--accent-soft);
+    border-radius:999px;padding:2px 8px;letter-spacing:.05em;white-space:nowrap;
+  }
+  .pblock .tk{color:var(--ink-3);font-size:11px;white-space:nowrap}
+  .wire-foot{
+    flex:none;border-top:1px dashed var(--line);padding-top:12px;margin-top:6px;
+    display:flex;align-items:baseline;justify-content:space-between;
+  }
+  .wire-foot .cnt{font-family:var(--mono);font-size:30px;font-weight:800;color:var(--accent);
+    font-variant-numeric:tabular-nums}
+  .wire-foot .lbl{font-size:12px;color:var(--ink-3);font-weight:600}
+  .turnpill{font-size:12px;font-weight:700;background:var(--ground);border:1px solid var(--line);
+    border-radius:999px;padding:4px 12px;color:var(--ink-2)}
+
+  /* =========================================================
+     SCENE 2 — TOKEN CURVE
+  ==========================================================*/
+  .chart-wrap{flex:1;display:grid;grid-template-columns:1.6fr 1fr;gap:32px;min-height:0}
+  .chart-card{background:var(--paper);border:1px solid var(--line);border-radius:18px;
+    padding:26px 30px 18px;box-shadow:0 8px 24px rgba(16,24,40,.06);display:flex;flex-direction:column}
+  .chart-card h3{font-size:17px;font-weight:750;margin-bottom:4px}
+  .chart-card .cap{font-size:13px;color:var(--ink-3);margin-bottom:12px}
+  .chart-svg{flex:1;width:100%}
+  .axis{stroke:#d0d5dd;stroke-width:1}
+  .gridline{stroke:#f2f4f7;stroke-width:1}
+  .tick-label{font-size:11px;fill:var(--ink-3);font-family:var(--mono)}
+  .flat-line{fill:none;stroke:var(--accent);stroke-width:3.5;stroke-linecap:round}
+  .mem-line{fill:none;stroke:var(--green);stroke-width:3.5;stroke-linecap:round}
+  .curve-label{font-size:13px;font-weight:800}
+  .side-stack{display:flex;flex-direction:column;gap:18px}
+  .stat-card{
+    background:var(--paper);border:1px solid var(--line);border-radius:16px;padding:20px 24px;
+    box-shadow:0 6px 18px rgba(16,24,40,.05);
+  }
+  .stat-card .big{font-size:44px;font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+  .stat-card .big.red{color:var(--accent)}
+  .stat-card .big.green{color:var(--green)}
+  .stat-card .big.navy{color:var(--navy)}
+  .stat-card .what{font-size:14px;color:var(--ink-2);margin-top:4px;line-height:1.45}
+  .xfactor{
+    position:absolute;background:var(--navy);color:#fff;font-weight:800;font-size:22px;
+    border-radius:12px;padding:10px 18px;box-shadow:0 10px 24px rgba(16,24,40,.25);
+  }
+
+  /* =========================================================
+     SCENE 3 — LESS BEATS MORE
+  ==========================================================*/
+  .lim-wrap{flex:1;display:flex;flex-direction:column;gap:26px;min-height:0}
+  .transcript-strip{background:var(--paper);border:1px solid var(--line);border-radius:16px;
+    padding:24px 28px;box-shadow:0 6px 18px rgba(16,24,40,.05)}
+  .strip-title{font-size:15px;font-weight:750;margin-bottom:14px;display:flex;gap:10px;align-items:center}
+  .strip-row{position:relative;height:64px}
+  .strip-bg{position:absolute;inset:0;border-radius:10px;overflow:hidden;display:flex}
+  .strip-bg i{flex:1;background:#eef0f4;border-right:2px solid #fff}
+  .strip-bg i:nth-child(odd){background:#f5f6f8}
+  .fact-marker{
+    position:absolute;top:-6px;bottom:-6px;left:46%;width:3.2%;background:var(--accent);
+    border-radius:6px;box-shadow:0 0 0 4px var(--accent-soft);
+  }
+  .fact-tag{position:absolute;top:-40px;left:41%;font-size:12.5px;font-weight:750;color:var(--accent);
+    background:var(--accent-soft);border-radius:8px;padding:4px 10px}
+  .ucurve{position:absolute;inset:-4px 0;width:100%;height:calc(100% + 8px);pointer-events:none}
+  .ucurve path{fill:none;stroke:var(--blue);stroke-width:3;stroke-dasharray:6 5}
+  .ucurve-tag{position:absolute;top:8px;left:50%;transform:translateX(-50%);
+    font-size:12.5px;font-weight:750;color:var(--blue);background:var(--blue-soft);
+    border-radius:8px;padding:4px 10px}
+  .duel{display:grid;grid-template-columns:1fr 1fr;gap:26px;flex:1;min-height:0}
+  .duel-card{background:var(--paper);border:1px solid var(--line);border-radius:16px;padding:22px 26px;
+    box-shadow:0 6px 18px rgba(16,24,40,.05);display:flex;flex-direction:column}
+  .duel-card h3{font-size:16px;font-weight:750;margin-bottom:14px}
+  .hbar{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+  .hbar .who{width:150px;font-size:13.5px;font-weight:700;color:var(--ink-2);flex:none}
+  .hbar .track{flex:1;height:30px;background:var(--ground);border-radius:8px;overflow:hidden}
+  .hbar .fill{height:100%;width:0;border-radius:8px;transition:width 1.1s cubic-bezier(.2,.7,.2,1);
+    display:flex;align-items:center;justify-content:flex-end;padding-right:10px;
+    color:#fff;font-weight:800;font-size:14px;font-variant-numeric:tabular-nums}
+  .fill.f-mem{background:var(--green)}
+  .fill.f-flat{background:var(--accent)}
+  .fill.f-tie{background:#98a2b3}
+  .duel-note{font-size:13.5px;color:var(--ink-2);line-height:1.5;margin-top:auto}
+  .duel-note b{color:var(--ink)}
+
+  /* =========================================================
+     SCENE 4 — MEMORY UPDATED
+  ==========================================================*/
+  .pipe{flex:1;display:grid;grid-template-columns:1fr 210px 1.25fr;gap:22px;align-items:stretch;min-height:0}
+  .convo-col,.db-col{background:var(--paper);border:1px solid var(--line);border-radius:16px;
+    padding:18px 20px;box-shadow:0 6px 18px rgba(16,24,40,.05);display:flex;flex-direction:column;gap:10px;overflow:hidden}
+  .col-title{font-size:13px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);margin-bottom:4px}
+  .cline{
+    font-size:14px;line-height:1.4;padding:9px 13px;border-radius:10px;background:var(--ground);
+    border:1px solid var(--line);transition:.45s;position:relative;
+  }
+  .cline .role{font-size:10.5px;font-weight:800;letter-spacing:.06em;color:var(--ink-3);display:block;margin-bottom:2px}
+  .cline.keep{border-color:#b7e0cd;background:var(--green-soft)}
+  .cline.drop{opacity:.42;text-decoration:line-through;text-decoration-color:rgba(16,24,40,.35)}
+  .cline .verdict{
+    position:absolute;top:-9px;right:-6px;font-size:10px;font-weight:800;border-radius:999px;
+    padding:3px 9px;letter-spacing:.05em;opacity:0;transform:scale(.7);transition:.3s;
+  }
+  .cline.judged .verdict{opacity:1;transform:none}
+  .verdict.v-keep{background:var(--green);color:#fff}
+  .verdict.v-drop{background:#667085;color:#fff}
+  .extractor{
+    align-self:center;background:var(--navy);color:#fff;border-radius:16px;padding:22px 18px;
+    text-align:center;box-shadow:0 12px 26px rgba(16,24,40,.22);width:100%;
+  }
+  .extractor .gear{font-size:30px;margin-bottom:8px;display:block}
+  .extractor b{font-size:15px;display:block;margin-bottom:4px}
+  .extractor span{font-size:12px;color:#c6d0e4;line-height:1.4;display:block}
+  .extractor.working{animation:thinking 1s ease infinite alternate}
+  @keyframes thinking{from{box-shadow:0 12px 26px rgba(16,24,40,.22)}to{box-shadow:0 12px 40px rgba(47,111,237,.4)}}
+  .mrec{
+    border:1px solid var(--line);border-left:4px solid var(--green);border-radius:10px;
+    padding:10px 14px;font-size:13.5px;background:#fff;
+    opacity:0;transform:translateX(-18px);transition:.45s;
+  }
+  .mrec.in{opacity:1;transform:none}
+  .mrec .mtype{font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--green)}
+  .mrec .scopes{margin-top:6px;display:flex;gap:6px;flex-wrap:wrap}
+  .scope-chip{font-family:var(--mono);font-size:10.5px;background:var(--ground);border:1px solid var(--line);
+    border-radius:999px;padding:2px 9px;color:var(--ink-2)}
+  .lifecycle{display:flex;gap:0;align-items:center;margin-top:10px;flex:none}
+  .lc-step{
+    flex:1;text-align:center;font-size:12.5px;font-weight:750;color:var(--ink-2);
+    background:var(--paper);border:1px solid var(--line);padding:10px 6px;position:relative;
+  }
+  .lc-step:first-child{border-radius:10px 0 0 10px}
+  .lc-step:last-child{border-radius:0 10px 10px 0}
+  .lc-step.hot{background:var(--navy);color:#fff;border-color:var(--navy)}
+  .lc-step small{display:block;font-weight:500;font-size:10.5px;color:var(--ink-3);margin-top:2px}
+  .lc-step.hot small{color:#c6d0e4}
+
+  /* =========================================================
+     SCENE 5 — DATABASE PROBLEM
+  ==========================================================*/
+  .map-wrap{flex:1;display:grid;grid-template-columns:1.25fr 1fr;gap:30px;min-height:0}
+  .req-rows{display:flex;flex-direction:column;gap:12px}
+  .req{
+    display:grid;grid-template-columns:1fr 34px 1fr;align-items:center;gap:10px;
+    background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:14px 20px;
+    box-shadow:0 4px 12px rgba(16,24,40,.04);
+  }
+  .req .need{font-size:15px;font-weight:700}
+  .req .need small{display:block;font-weight:500;font-size:12.5px;color:var(--ink-3);margin-top:2px}
+  .req .arrow{color:var(--accent);font-weight:800;text-align:center;font-size:18px}
+  .req .db{font-size:14px;font-weight:650;color:var(--navy)}
+  .req .db code{font-family:var(--mono);font-size:12px;background:var(--ground);border:1px solid var(--line);
+    border-radius:6px;padding:1px 7px}
+  .schema-card{background:var(--paper);border:1px solid var(--line);border-radius:18px;padding:22px 26px;
+    box-shadow:0 8px 24px rgba(16,24,40,.06);display:flex;flex-direction:column}
+  .schema-card h3{font-size:16px;font-weight:750;margin-bottom:14px}
+  .tbls{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .tbl{border:1px solid var(--line);border-radius:10px;overflow:hidden;font-family:var(--mono);font-size:11.5px}
+  .tbl .tname{background:var(--navy);color:#fff;padding:6px 10px;font-weight:700;font-size:12px}
+  .tbl .tcol{padding:4px 10px;border-top:1px solid var(--line);color:var(--ink-2)}
+  .tbl .tcol.hl{color:var(--accent);font-weight:700}
+  .acc-row{display:flex;gap:14px;margin-top:auto;padding-top:18px}
+  .acc{flex:1;text-align:center;background:var(--ground);border:1px solid var(--line);border-radius:12px;padding:12px 8px}
+  .acc .n{font-size:26px;font-weight:800;color:var(--navy);font-variant-numeric:tabular-nums}
+  .acc .l{font-size:11.5px;color:var(--ink-2);margin-top:2px;line-height:1.3}
+
+  /* =========================================================
+     SCENE 6 — RECAP
+  ==========================================================*/
+  #s6{justify-content:center}
+  .recap-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin-top:34px}
+  .rcard{background:var(--paper);border:1px solid var(--line);border-radius:16px;padding:24px 26px;
+    box-shadow:0 6px 18px rgba(16,24,40,.05)}
+  .rcard .rn{font-size:40px;font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+  .rcard .rl{font-size:14px;color:var(--ink-2);margin-top:6px;line-height:1.5}
+  .src{margin-top:30px;font-size:12.5px;color:var(--ink-3)}
+
+  /* ---------- compact layout for shorter windows ---------- */
+  @media (max-height:780px){
+    .scene{padding:30px 48px 58px}
+    h1,#s0 h1{font-size:52px}
+    h2{font-size:27px}
+    .sub{font-size:14.5px}
+    #s0 .sub{font-size:17px}
+    .scene-head{margin-bottom:14px}
+    .reveal{font-size:15.5px;padding:12px 22px;border-radius:12px}
+    .tchip{font-size:13px;padding:8px 16px}
+    .bubble{font-size:13px;padding:8px 12px;max-width:88%}
+    .panel-body{padding:12px 16px;gap:8px}
+    .wire-foot .cnt{font-size:24px}
+    .stat-card{padding:12px 18px}
+    .stat-card .big{font-size:28px}
+    .stat-card .what{font-size:12.5px;margin-top:2px}
+    .side-stack{gap:12px}
+    .chart-wrap{gap:20px}
+    .xfactor{font-size:16px;padding:8px 14px}
+    .cline{font-size:12.5px;padding:7px 11px}
+    .mrec{font-size:12px;padding:8px 11px}
+    .extractor{padding:14px 12px}
+    .extractor .gear{font-size:22px;margin-bottom:4px}
+    .extractor span{font-size:11px}
+    .lc-step{font-size:11px;padding:7px 4px}
+    .lc-step small{font-size:9.5px}
+    .req{padding:9px 14px}
+    .req .need{font-size:13px}
+    .req .need small{font-size:11px}
+    .req .db{font-size:12.5px}
+    .req-rows{gap:8px}
+    .schema-card{padding:14px 18px}
+    .tbl{font-size:10.5px}
+    .acc-row{padding-top:10px;gap:8px}
+    .acc .n{font-size:20px}
+    .acc .l{font-size:10.5px}
+    #s6 h2{font-size:32px}
+    .recap-grid{gap:12px;margin-top:20px}
+    .rcard{padding:14px 18px}
+    .rcard .rn{font-size:26px}
+    .rcard .rl{font-size:12.5px;margin-top:3px}
+    .src{margin-top:16px;font-size:11px}
+    .duel{gap:16px}
+    .duel-card{padding:14px 18px}
+    .duel-card h3{font-size:13.5px;margin-bottom:10px}
+    .duel-note{font-size:12.5px}
+    .duel-card .duel-note[style]{font-size:13.5px !important}
+    .transcript-strip{padding:16px 22px}
+    .strip-row{height:52px}
+    .lim-wrap{gap:14px}
+  }
+</style>
+</head>
+<body>
+<div class="stage">
+
+  <!-- ================= SCENE 0 : TITLE ================= -->
+  <section class="scene active" id="s0" data-beats="3">
+    <div class="kicker" data-b="0">An educational demo</div>
+    <h1 data-b="0">The Memory Illusion<br><span style="color:var(--accent)">what your AI never tells you</span></h1>
+    <p class="sub" data-b="1">Your AI assistant feels like it knows you. It greets you, recalls your project,
+      remembers you're vegetarian. Here are five things happening behind that curtain
+      that almost nobody ever sees.</p>
+    <div class="title-stats">
+      <div class="tchip" data-b="2">It re-reads <b>everything</b>, every time</div>
+      <div class="tchip" data-b="2">By turn 80: <b>13,900</b> tokens per message</div>
+      <div class="tchip" data-b="2">Less context won <b>48 : 13</b></div>
+      <div class="tchip" data-b="2">"Memory updated" = <b>a database write</b></div>
+    </div>
+  </section>
+
+  <!-- ================= SCENE 1 : CHAT X-RAY ================= -->
+  <section class="scene" id="s1" data-beats="8">
+    <div class="scene-head">
+      <div class="kicker">Hidden fact #1</div>
+      <h2>Your AI re-reads the entire conversation. Every. Single. Message.</h2>
+      <p class="sub">The left side is what you see. The right side is what actually goes over the wire.</p>
+    </div>
+    <div class="xray">
+      <div class="panel" data-b="0">
+        <div class="panel-head"><span class="cam"><i></i><i></i><i></i></span>
+          What you see <span class="badge user-view">CHAT APP</span></div>
+        <div class="panel-body" id="chat-body"></div>
+      </div>
+      <div class="panel" data-b="0">
+        <div class="panel-head">🔍 What is actually sent to the model
+          <span class="badge xray-view">X-RAY</span></div>
+        <div class="panel-body wire">
+          <div class="send-label" id="send-label" style="visibility:hidden">
+            <span class="pulse"></span><span id="send-text">SENDING REQUEST…</span>
+            <span class="turnpill" id="turnpill" style="margin-left:auto">turn 0</span>
+          </div>
+          <div class="payload" id="payload"></div>
+          <div class="wire-foot">
+            <span class="lbl">input tokens in <u>this one request</u></span>
+            <span class="cnt" id="tok-cnt">0</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="reveal" data-b="7" style="margin-top:26px">
+      The model itself is <em>frozen</em> — its weights never change while you chat.
+      The "conversation" exists only because the app <em>re-uploads your entire history</em> with every message.
+      Close the tab, and the model has no idea you ever existed.
+    </div>
+  </section>
+
+  <!-- ================= SCENE 2 : THE CURVE ================= -->
+  <section class="scene" id="s2" data-beats="5">
+    <div class="scene-head">
+      <div class="kicker">Hidden fact #2</div>
+      <h2>That habit gets expensive — fast</h2>
+      <p class="sub">Oracle's research team measured an 80-turn conversation: replaying the flat history vs. a real memory layer.</p>
+    </div>
+    <div class="chart-wrap">
+      <div class="chart-card" data-b="0" style="position:relative">
+        <h3>Input tokens sent per request</h3>
+        <div class="cap">80-turn scripted conversation · Oracle Agent Memory technical report (arXiv, 2026)</div>
+        <svg class="chart-svg" id="curve-svg" viewBox="0 0 900 430" preserveAspectRatio="xMidYMid meet"></svg>
+        <div class="xfactor" id="xfactor" style="right:36px;top:96px;opacity:0;transition:.5s">10.7× fewer tokens</div>
+      </div>
+      <div class="side-stack">
+        <div class="stat-card" data-b="1">
+          <div class="big red" id="flat-big">~13,900</div>
+          <div class="what">tokens re-sent <b>per request</b> by turn 80 with flat history —
+            you pay to re-read turn 1, again, for the 80th time.</div>
+        </div>
+        <div class="stat-card" data-b="2">
+          <div class="big green">~1,300</div>
+          <div class="what">tokens per request with a memory layer — summaries + extracted
+            facts instead of the raw transcript.</div>
+        </div>
+        <div class="stat-card" data-b="4">
+          <div class="big navy">306,823 → 121,268</div>
+          <div class="what">total tokens for <b>one 8-question research chat</b>: flat history vs.
+            memory with a 10k summarization trigger. A single conversation, a third of a novel.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= SCENE 3 : LESS BEATS MORE ================= -->
+  <section class="scene" id="s3" data-beats="6">
+    <div class="scene-head">
+      <div class="kicker">Hidden fact #3</div>
+      <h2>Giving the AI <span style="color:var(--accent)">less</span> made it <span style="color:var(--green)">smarter</span></h2>
+      <p class="sub">Surely the full transcript — every fact, in order — should win? It didn't.</p>
+    </div>
+    <div class="lim-wrap">
+      <div class="transcript-strip" data-b="0">
+        <div class="strip-title">📜 A long transcript, with the one fact that matters buried in the middle</div>
+        <div class="strip-row">
+          <div class="strip-bg" id="strip-bg"></div>
+          <div class="fact-tag" data-b="1">the fact you need</div>
+          <div class="fact-marker" data-b="1"></div>
+          <svg class="ucurve" viewBox="0 0 1000 80" preserveAspectRatio="none" data-b="2">
+            <path d="M 10 14 C 260 14 300 62 500 62 C 700 62 740 14 990 14"/>
+          </svg>
+          <div class="ucurve-tag" data-b="2">what the model actually attends to — "lost in the middle"</div>
+        </div>
+      </div>
+      <div class="duel">
+        <div class="duel-card" data-b="3">
+          <h3>Head-to-head over 80 turns — judged blind on accuracy, completeness, relevance, coherence</h3>
+          <div class="hbar"><span class="who">Memory layer<br><small style="font-weight:500;color:var(--ink-3)">bounded context</small></span>
+            <div class="track"><div class="fill f-mem" id="bar-mem">48</div></div></div>
+          <div class="hbar"><span class="who">Flat history<br><small style="font-weight:500;color:var(--ink-3)">saw everything</small></span>
+            <div class="track"><div class="fill f-flat" id="bar-flat">13</div></div></div>
+          <div class="hbar"><span class="who">Tie</span>
+            <div class="track"><div class="fill f-tie" id="bar-tie">19</div></div></div>
+          <div class="duel-note">The flat-history side had a <b>perfect information advantage</b> —
+            the entire verbatim conversation, in order. It still lost <b>48 to 13</b>.</div>
+        </div>
+        <div class="duel-card" data-b="4">
+          <h3>Why does less beat more?</h3>
+          <div class="duel-note" style="margin-top:0;font-size:15px;line-height:1.7">
+            A focused context <b>concentrates attention</b> on what matters.<br>
+            A full transcript <b>spreads attention</b> across 79 turns of noise.<br><br>
+            The goal was never <i>"fit more into the window."</i><br>
+            The goal is <b>deciding what deserves to be there.</b>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="reveal" data-b="5" style="margin-top:24px">
+      Bigger context windows don't solve memory. <em>Curation beats accumulation</em> — and curation
+      is a data-management problem.
+    </div>
+  </section>
+
+  <!-- ================= SCENE 4 : MEMORY UPDATED ================= -->
+  <section class="scene" id="s4" data-beats="8">
+    <div class="scene-head">
+      <div class="kicker">Hidden fact #4</div>
+      <h2>What actually happens when it says <span style="font-family:var(--mono);font-size:.8em;background:var(--ground);border:1px solid var(--line);border-radius:8px;padding:2px 12px">Memory updated</span></h2>
+      <p class="sub">A second AI reads your conversation, decides which sentences deserve to become facts about you — and writes them into a database.</p>
+    </div>
+    <div class="pipe">
+      <div class="convo-col" data-b="0">
+        <div class="col-title">Your conversation</div>
+        <div class="cline" id="cl0"><span class="role">YOU</span>I'm vegetarian, and I always prefer window seats on flights.<span class="verdict v-keep">KEEP</span></div>
+        <div class="cline" id="cl1"><span class="role">YOU</span>My OTP is 448291, use it to check in.<span class="verdict v-drop">DISCARD</span></div>
+        <div class="cline" id="cl2"><span class="role">YOU</span>Also — I'm planning a trip to Kyoto in November.<span class="verdict v-keep">KEEP</span></div>
+        <div class="cline" id="cl3"><span class="role">YOU</span>haha ok thanks, you're the best 🙌<span class="verdict v-drop">DISCARD</span></div>
+        <div class="cline" id="cl4"><span class="role">ASSISTANT · tool result</span>Booking confirmed: JL726, seat 42A (window).<span class="verdict v-keep">KEEP</span></div>
+      </div>
+      <div style="display:flex;flex-direction:column;justify-content:center">
+        <div class="extractor" id="extractor" data-b="1">
+          <span class="gear">🧠</span>
+          <b>Extraction LLM</b>
+          <span>reads raw turns, keeps durable facts, discards noise, secrets &amp; small talk</span>
+        </div>
+      </div>
+      <div class="db-col" data-b="0">
+        <div class="col-title">Memory records · written to the database</div>
+        <div class="mrec" id="mr0"><span class="mtype">preference</span><div>User is vegetarian; prefers window seats.</div>
+          <div class="scopes"><span class="scope-chip">user_id: rahul_17</span><span class="scope-chip">agent_id: travel_bot</span><span class="scope-chip">scope: all threads</span></div></div>
+        <div class="mrec" id="mr1"><span class="mtype">fact</span><div>User is planning a trip to Kyoto in November.</div>
+          <div class="scopes"><span class="scope-chip">user_id: rahul_17</span><span class="scope-chip">thread_id: trip_042</span></div></div>
+        <div class="mrec" id="mr2"><span class="mtype">fact · tool-confirmed</span><div>Flight JL726 booked, seat 42A.</div>
+          <div class="scopes"><span class="scope-chip">source: booking_tool</span><span class="scope-chip">thread_id: trip_042</span></div></div>
+        <div class="lifecycle" data-b="6">
+          <div class="lc-step" id="lc0">Ingest<small>raw messages</small></div>
+          <div class="lc-step" id="lc1">Extract<small>find durable facts</small></div>
+          <div class="lc-step" id="lc2">Consolidate<small>merge repeats</small></div>
+          <div class="lc-step" id="lc3">Retrieve<small>scoped search</small></div>
+          <div class="lc-step" id="lc4">Summarize<small>compact context</small></div>
+          <div class="lc-step" id="lc5">Revise<small>update / forget</small></div>
+        </div>
+      </div>
+    </div>
+    <div class="reveal" data-b="7" style="margin-top:22px">
+      Good memory is <em>selective</em>. Remembering everything makes retrieval noisier —
+      the hard problem is deciding what <em>not</em> to remember, who a memory belongs to, and when to forget it.
+    </div>
+  </section>
+
+  <!-- ================= SCENE 5 : DATABASE PROBLEM ================= -->
+  <section class="scene" id="s5" data-beats="7">
+    <div class="scene-head">
+      <div class="kicker">Hidden fact #5</div>
+      <h2>Write down what memory needs… you just wrote a database spec</h2>
+      <p class="sub">This is the core claim of Oracle's research report — and why their memory layer lives <i>inside</i> the database.</p>
+    </div>
+    <div class="map-wrap">
+      <div class="req-rows">
+        <div class="req" data-b="0">
+          <div class="need">Facts must survive restarts &amp; sessions<small>"remember I'm vegetarian" — forever</small></div>
+          <div class="arrow">→</div><div class="db">Persistence &amp; transactions</div>
+        </div>
+        <div class="req" data-b="1">
+          <div class="need">Find memories by meaning<small>"seat preference" ≈ "likes window seats"</small></div>
+          <div class="arrow">→</div><div class="db">Vector search + indexes <code>HNSW</code></div>
+        </div>
+        <div class="req" data-b="2">
+          <div class="need">My memories must never leak to you<small>per user, per agent, per thread</small></div>
+          <div class="arrow">→</div><div class="db">Scoped queries + row-level security</div>
+        </div>
+        <div class="req" data-b="3">
+          <div class="need">Facts change — memories must be edited<small>moved cities? new preference?</small></div>
+          <div class="arrow">→</div><div class="db">Updates, audit trails, deletion</div>
+        </div>
+        <div class="req" data-b="4">
+          <div class="need">Structured + unstructured, together<small>profiles, JSON, raw text, embeddings</small></div>
+          <div class="arrow">→</div><div class="db">Relational + JSON + vectors, one engine</div>
+        </div>
+      </div>
+      <div class="schema-card" data-b="5">
+        <h3>The actual schema behind agent memory</h3>
+        <div class="tbls">
+          <div class="tbl"><div class="tname">MESSAGE</div>
+            <div class="tcol">record_id · content</div><div class="tcol hl">user_id · agent_id · thread_id</div></div>
+          <div class="tbl"><div class="tname">MEMORY</div>
+            <div class="tcol">content · memory_type</div><div class="tcol hl">fact | preference | guideline</div></div>
+          <div class="tbl"><div class="tname">ACTOR_PROFILE</div>
+            <div class="tcol">information · actor_type</div><div class="tcol">one table, users + agents</div></div>
+          <div class="tbl"><div class="tname">RECORD_CHUNKS</div>
+            <div class="tcol hl">embedding VECTOR</div><div class="tcol">chunk_content · scope ids</div></div>
+        </div>
+        <div class="acc-row" data-b="6">
+          <div class="acc"><div class="n">93.8%</div><div class="l">LongMemEval accuracy<br>(469 / 500)</div></div>
+          <div class="acc"><div class="n">100%</div><div class="l">single-session<br>assistant recall</div></div>
+          <div class="acc"><div class="n">88%</div><div class="l">multi-session reasoning<br>— the honest low point</div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= SCENE 6 : RECAP ================= -->
+  <section class="scene" id="s6" data-beats="4">
+    <div class="kicker" data-b="0">Recap — say "I never thought of it" one more time</div>
+    <h2 data-b="0" style="font-size:44px;max-width:1000px">Five invisible facts behind every AI chat</h2>
+    <div class="recap-grid">
+      <div class="rcard" data-b="1"><div class="rn" style="color:var(--accent)">∞ replay</div>
+        <div class="rl">The model is stateless. Your whole conversation is re-uploaded on every message — the "memory" you feel is a re-run.</div></div>
+      <div class="rcard" data-b="1"><div class="rn" style="color:var(--accent)">13,900 vs 1,300</div>
+        <div class="rl">Tokens per request at turn 80: flat history vs. a memory layer. That's a 10.7× tax for pretending replay is memory.</div></div>
+      <div class="rcard" data-b="2"><div class="rn" style="color:var(--green)">48 : 13</div>
+        <div class="rl">Bounded, curated context beat the complete transcript — even though the transcript held every fact.</div></div>
+      <div class="rcard" data-b="2"><div class="rn" style="color:var(--navy)">"Memory updated"</div>
+        <div class="rl">= an LLM extracted facts about you and wrote them to a database, scoped to you, your agent, your thread.</div></div>
+      <div class="rcard" data-b="3"><div class="rn" style="color:var(--navy)">93.8%</div>
+        <div class="rl">LongMemEval accuracy when memory is treated as a managed database lifecycle: extract → consolidate → retrieve → revise.</div></div>
+      <div class="rcard" data-b="3"><div class="rn" style="color:var(--accent)">DB problem</div>
+        <div class="rl">Persistence, semantic indexes, scoping, governance, revision — agent memory's wish-list is a database spec.</div></div>
+    </div>
+    <div class="src" data-b="3">Sources: “Oracle Agent Memory as an Enterprise Memory Substrate for Long-Horizon AI Agents” (arXiv:2607.13157) ·
+      Oracle Developers Blog, “Agent memory is a database problem” · Liu et al., “Lost in the Middle” (TACL 2024)</div>
+  </section>
+</div>
+
+<!-- HUD -->
+<div class="hud" id="hud">
+  <div class="dots" id="dots"></div>
+  <div class="hint"><b>→ / space</b> next beat &nbsp;·&nbsp; <b>←</b> back &nbsp;·&nbsp; <b>r</b> replay scene &nbsp;·&nbsp; <b>h</b> hide bar</div>
+</div>
+
+<script>
+/* ============================================================
+   Beat engine
+============================================================ */
+const scenes = [...document.querySelectorAll('.scene')];
+let si = 0, beat = 0;
+const dotsEl = document.getElementById('dots');
+scenes.forEach((s,i)=>{
+  const d = document.createElement('div'); d.className='dot'+(i===0?' cur':'');
+  d.onclick = ()=>gotoScene(i,0); dotsEl.appendChild(d);
+});
+
+function maxBeats(i){ return +scenes[i].dataset.beats; }
+
+function applyBeats(){
+  scenes[si].querySelectorAll('[data-b]').forEach(el=>{
+    el.classList.toggle('on', +el.dataset.b <= beat);
+  });
+  hooks[scenes[si].id] && hooks[scenes[si].id](beat);
+}
+
+function gotoScene(i, b){
+  scenes[si].classList.remove('active');
+  si = i; beat = b;
+  scenes[si].classList.add('active');
+  [...dotsEl.children].forEach((d,k)=>d.classList.toggle('cur',k===si));
+  resetScene(scenes[si].id);
+  applyBeats();
+}
+
+function next(){
+  if(beat < maxBeats(si)-1){ beat++; applyBeats(); }
+  else if(si < scenes.length-1){ gotoScene(si+1, 0); }
+}
+function prev(){
+  if(beat > 0){ beat--; applyBeats(); }
+  else if(si > 0){ gotoScene(si-1, maxBeats(si-1)-1); }
+}
+
+document.addEventListener('keydown', e=>{
+  if(e.key==='ArrowRight'||e.key===' '||e.key==='PageDown'||e.key==='ArrowDown'){ e.preventDefault(); next(); }
+  else if(e.key==='ArrowLeft'||e.key==='PageUp'||e.key==='ArrowUp'){ e.preventDefault(); prev(); }
+  else if(e.key==='r'||e.key==='R'){ gotoScene(si,0); }
+  else if(e.key==='h'||e.key==='H'){ document.getElementById('hud').classList.toggle('hidden'); }
+});
+document.addEventListener('click', e=>{
+  if(e.target.closest('.hud')) return;
+  next();
+});
+
+/* ============================================================
+   Scene 1 — chat x-ray
+============================================================ */
+const convo = [
+  {role:'u', text:"Planning a 5-day Tokyo trip in November. I'm vegetarian, budget ~$2,000.", tk:26},
+  {role:'a', text:"Great! November is beautiful. For vegetarians, I'd start with shojin-ryori temple cuisine and Ain Soph in Ginza…", tk:38},
+  {role:'u', text:"Nice. Any good day trips from Tokyo?", tk:11},
+  {role:'a', text:"Three great options: Nikko for shrines and waterfalls, Kamakura for the Great Buddha, Hakone for Fuji views and onsen…", tk:41},
+  {role:'u', text:"Book me something near Shinjuku, window seat on the flight please.", tk:16},
+  {role:'a', text:"Noted — window seat and a Shinjuku hotel. Comparing options within your $2,000 budget now…", tk:31},
+  {role:'u', text:"Perfect. Also remind me: what was that vegetarian place you mentioned?", tk:15},
+];
+const SYS_TK = 220;
+const chatBody = document.getElementById('chat-body');
+const payloadEl = document.getElementById('payload');
+const tokCnt = document.getElementById('tok-cnt');
+const sendLabel = document.getElementById('send-label');
+const turnpill = document.getElementById('turnpill');
+let s1Timers = [];
+
+function s1Reset(){
+  s1Timers.forEach(clearTimeout); s1Timers=[];
+  chatBody.innerHTML=''; payloadEl.innerHTML='';
+  tokCnt.textContent='0'; sendLabel.style.visibility='hidden';
+}
+
+function animateCount(el, from, to, ms){
+  const t0 = performance.now();
+  function step(t){
+    const p = Math.min(1,(t-t0)/ms), v = Math.round(from+(to-from)*(1-Math.pow(1-p,3)));
+    el.textContent = v.toLocaleString();
+    if(p<1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+/* beats 1..6 = messages 0..5 arriving; each USER send rebuilds payload */
+function s1Hook(b){
+  if(b===0){ s1Reset(); return; }
+  const idx = b-1;                      // message index for this beat
+  if(idx >= convo.length) return;
+  // only render messages up to idx (idempotent rebuild when jumping)
+  chatBody.innerHTML='';
+  for(let i=0;i<=idx && i<convo.length;i++){
+    const m = convo[i];
+    const bb = document.createElement('div');
+    bb.className = 'bubble '+m.role+' show';
+    bb.textContent = m.text;
+    chatBody.appendChild(bb);
+  }
+  // if this beat's newest message is from the user -> fire a "send" rebuild
+  const newest = convo[idx];
+  buildPayload(idx, newest.role==='u');
+}
+
+function buildPayload(uptoIdx, animate){
+  s1Timers.forEach(clearTimeout); s1Timers=[];
+  payloadEl.innerHTML='';
+  sendLabel.style.visibility='visible';
+  const turnNo = convo.slice(0,uptoIdx+1).filter(m=>m.role==='u').length;
+  turnpill.textContent = 'turn '+turnNo;
+  document.getElementById('send-text').textContent =
+    animate ? 'SENDING REQUEST — FULL HISTORY ATTACHED' : 'RESPONSE RECEIVED';
+
+  const blocks = [{cls:'sys', label:'system prompt · instructions & tools', tk:SYS_TK, res:false}];
+  for(let i=0;i<=uptoIdx;i++){
+    const m = convo[i];
+    blocks.push({
+      cls: m.role==='u'?'pu':'pa',
+      label: (m.role==='u'?'you · ':'assistant · ')+'"'+m.text.slice(0,34)+'…"',
+      tk: m.tk,
+      res: i < uptoIdx      // everything except the newest line is a re-send
+    });
+  }
+  let total = 0;
+  blocks.forEach((blk,i)=>{
+    total += blk.tk;
+    const div = document.createElement('div');
+    div.className = 'pblock '+blk.cls;
+    div.innerHTML = '<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+blk.label+'</span>'
+      + (blk.res?'<span class="resend">RE-SENT</span>':'')
+      + '<span class="tk">'+blk.tk+' tk</span>';
+    payloadEl.appendChild(div);
+    const delay = animate ? 90*i : 0;
+    s1Timers.push(setTimeout(()=>div.classList.add('in'), delay));
+  });
+  const prev = parseInt(tokCnt.textContent.replace(/,/g,''))||0;
+  animateCount(tokCnt, animate?0:prev, total, animate? 90*blocks.length+250 : 200);
+}
+
+/* ============================================================
+   Scene 2 — token curve (SVG)
+============================================================ */
+const svg = document.getElementById('curve-svg');
+const NS = 'http://www.w3.org/2000/svg';
+const M = {l:70,r:30,t:20,b:44}, W=900, H=430;
+const X = t => M.l + (t-1)/(80-1)*(W-M.l-M.r);
+const Y = v => H-M.b - (v/15000)*(H-M.t-M.b);
+let s2built = false, s2paths = {};
+
+function s2Build(){
+  svg.innerHTML=''; s2paths={};
+  // gridlines + y labels
+  [0,3000,6000,9000,12000,15000].forEach(v=>{
+    const g = document.createElementNS(NS,'line');
+    g.setAttribute('x1',M.l); g.setAttribute('x2',W-M.r);
+    g.setAttribute('y1',Y(v)); g.setAttribute('y2',Y(v));
+    g.setAttribute('class', v===0?'axis':'gridline'); svg.appendChild(g);
+    const tl = document.createElementNS(NS,'text');
+    tl.setAttribute('x',M.l-10); tl.setAttribute('y',Y(v)+4);
+    tl.setAttribute('text-anchor','end'); tl.setAttribute('class','tick-label');
+    tl.textContent = v===0?'0':(v/1000)+'k'; svg.appendChild(tl);
+  });
+  [1,20,40,60,80].forEach(t=>{
+    const tl = document.createElementNS(NS,'text');
+    tl.setAttribute('x',X(t)); tl.setAttribute('y',H-M.b+22);
+    tl.setAttribute('text-anchor','middle'); tl.setAttribute('class','tick-label');
+    tl.textContent = 'turn '+t; svg.appendChild(tl);
+  });
+  // flat-history line: ~ linear to 13,900
+  let dFlat='', dMem='';
+  for(let t=1;t<=80;t++){
+    const vf = 300 + (13900-300)*(t-1)/79 + Math.sin(t*1.7)*120;
+    const vm = 1000 + Math.sin(t*.9)*180 + Math.min(300,t*8);
+    dFlat += (t===1?'M':'L')+X(t).toFixed(1)+' '+Y(vf).toFixed(1)+' ';
+    dMem  += (t===1?'M':'L')+X(t).toFixed(1)+' '+Y(vm).toFixed(1)+' ';
+  }
+  const pf = document.createElementNS(NS,'path');
+  pf.setAttribute('d',dFlat); pf.setAttribute('class','flat-line'); svg.appendChild(pf);
+  const pm = document.createElementNS(NS,'path');
+  pm.setAttribute('d',dMem); pm.setAttribute('class','mem-line'); svg.appendChild(pm);
+  [[pf,'flat'],[pm,'mem']].forEach(([p,k])=>{
+    const L = p.getTotalLength();
+    p.style.strokeDasharray = L; p.style.strokeDashoffset = L;
+    p.style.transition = 'stroke-dashoffset 1.8s ease';
+    s2paths[k]=p;
+  });
+  // labels
+  const lf = document.createElementNS(NS,'text');
+  lf.setAttribute('x',X(58)); lf.setAttribute('y',Y(11300)-14);
+  lf.setAttribute('class','curve-label'); lf.setAttribute('fill','var(--accent)');
+  lf.textContent='flat history — re-send everything'; lf.setAttribute('opacity','0'); svg.appendChild(lf);
+  const lm = document.createElementNS(NS,'text');
+  lm.setAttribute('x',X(46)); lm.setAttribute('y',Y(1300)-16);
+  lm.setAttribute('class','curve-label'); lm.setAttribute('fill','var(--green)');
+  lm.textContent='memory layer — summaries + facts'; lm.setAttribute('opacity','0'); svg.appendChild(lm);
+  s2paths.lf = lf; s2paths.lm = lm;
+  s2built = true;
+}
+
+function s2Hook(b){
+  if(!s2built) s2Build();
+  const xf = document.getElementById('xfactor');
+  if(b>=1){ s2paths.flat.style.strokeDashoffset = 0; s2paths.lf.setAttribute('opacity','1'); }
+  else { const L=s2paths.flat.getTotalLength(); s2paths.flat.style.strokeDashoffset=L; s2paths.lf.setAttribute('opacity','0'); }
+  if(b>=2){ s2paths.mem.style.strokeDashoffset = 0; s2paths.lm.setAttribute('opacity','1'); }
+  else { const L=s2paths.mem.getTotalLength(); s2paths.mem.style.strokeDashoffset=L; s2paths.lm.setAttribute('opacity','0'); }
+  xf.style.opacity = b>=3 ? 1 : 0;
+}
+
+/* ============================================================
+   Scene 3 — strip + duel bars
+============================================================ */
+const stripBg = document.getElementById('strip-bg');
+for(let i=0;i<40;i++){ stripBg.appendChild(document.createElement('i')); }
+
+function s3Hook(b){
+  const set = (id,w,txt)=>{ const el=document.getElementById(id);
+    el.style.width = b>=3 ? w : '0'; el.textContent = b>=3 ? txt : ''; };
+  set('bar-mem','92%','48 wins');
+  set('bar-flat','25%','13');
+  set('bar-tie','36%','19 ties');
+}
+
+/* ============================================================
+   Scene 4 — extraction pipeline
+============================================================ */
+let s4Timers=[];
+function s4Reset(){
+  s4Timers.forEach(clearTimeout); s4Timers=[];
+  for(let i=0;i<5;i++){ const c=document.getElementById('cl'+i); c.classList.remove('judged','keep','drop'); }
+  for(let i=0;i<3;i++){ document.getElementById('mr'+i).classList.remove('in'); }
+  for(let i=0;i<6;i++){ document.getElementById('lc'+i).classList.remove('hot'); }
+  document.getElementById('extractor').classList.remove('working');
+}
+const verdicts = ['keep','drop','keep','drop','keep'];
+const recOf = {0:0, 2:1, 4:2};   // conversation line -> memory record
+
+function s4Hook(b){
+  // beats: 0 columns, 1 extractor, 2..5(ish) judge lines+records, 6 lifecycle, 7 reveal
+  const ex = document.getElementById('extractor');
+  ex.classList.toggle('working', b>=2 && b<6);
+  // judge lines progressively: beat2 -> lines 0,1 ; beat3 -> 2,3 ; beat4 -> 4 ; beat5 all
+  const upto = b<2 ? -1 : b===2 ? 1 : b===3 ? 3 : 4;
+  for(let i=0;i<5;i++){
+    const c = document.getElementById('cl'+i);
+    if(i<=upto){
+      c.classList.add('judged', verdicts[i]);
+      if(recOf[i]!==undefined) document.getElementById('mr'+recOf[i]).classList.add('in');
+    } else {
+      c.classList.remove('judged','keep','drop');
+      if(recOf[i]!==undefined) document.getElementById('mr'+recOf[i]).classList.remove('in');
+    }
+  }
+  // lifecycle sweep on beat 6+
+  for(let i=0;i<6;i++) document.getElementById('lc'+i).classList.remove('hot');
+  if(b>=6){
+    for(let i=0;i<6;i++){
+      s4Timers.push(setTimeout(()=>document.getElementById('lc'+i).classList.add('hot'), 250*i));
+    }
+  }
+}
+
+/* ============================================================
+   registry
+============================================================ */
+const hooks = { s1:s1Hook, s2:s2Hook, s3:s3Hook, s4:s4Hook };
+function resetScene(id){
+  if(id==='s1') s1Reset();
+  if(id==='s4') s4Reset();
+}
+applyBeats();
+</script>
+</body>
+</html>

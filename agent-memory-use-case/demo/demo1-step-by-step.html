@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Demo 1 · Flat history — step-by-step</title>
+<style>
+  :root{
+    --ink:#0f172a; --muted:#64748b; --bg:#f8fafc;
+    --local:#6366f1; --llm:#f59e0b; --flat:#dc2626; --oracle:#c74634;
+    --navy:#1b2a4a; --line:#e4e7ec; --ground:#f7f8fa;
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+    color:var(--ink);
+    background:
+      radial-gradient(1100px 520px at 85% -10%, #fdf0ee 0%, transparent 60%),
+      radial-gradient(900px 480px at -5% 115%, #eef2ff 0%, transparent 55%),
+      var(--bg);
+    padding:22px 18px 40px}
+  .wrap{max-width:1500px;margin:0 auto}
+  header{text-align:center;margin-bottom:8px}
+  .kicker{display:inline-flex;align-items:center;gap:8px;font-size:11.5px;font-weight:700;
+    letter-spacing:.14em;text-transform:uppercase;color:#fff;background:var(--flat);
+    padding:5px 13px;border-radius:999px;box-shadow:0 8px 20px -8px var(--flat)}
+  h1{font-size:28px;margin:12px 0 4px;font-weight:800;letter-spacing:-.02em}
+  h1 .grad{background:linear-gradient(90deg,var(--flat),var(--llm));
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  .sub{color:var(--muted);font-size:14px;margin:0}
+
+  .stage{display:grid;grid-template-columns:380px 1fr;gap:24px;margin-top:10px;align-items:stretch}
+  .stage svg{width:100%;height:auto;display:block}
+
+  [data-step]{transition:opacity .55s ease}
+  [data-step].off{opacity:0;pointer-events:none}
+  [data-step].fresh{animation:fadeIn .9s ease}
+  @keyframes fadeIn{from{opacity:0}}
+
+  .box rect{fill:#fff;rx:14;filter:drop-shadow(0 10px 18px rgba(15,23,42,.12));stroke-width:2}
+  .box .t{font-size:15px;font-weight:800;fill:var(--ink);text-anchor:middle}
+  .box .s{font-size:11px;fill:var(--muted);text-anchor:middle}
+  .box .f{font-size:10.5px;font-weight:600;fill:#475569;font-family:var(--mono);text-anchor:middle}
+  .b-local rect{stroke:var(--local)} .b-flat rect{stroke:var(--flat)} .b-llm rect{stroke:var(--llm)}
+  .zone{fill:#fff;opacity:.55;stroke-width:1.5;stroke-dasharray:2 5;rx:20;stroke:var(--local)}
+  .zlabel{font-size:11.5px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;fill:var(--local)}
+
+  .wire{fill:none;stroke-width:2.6;stroke-linecap:round;stroke-dasharray:8 8;animation:march 1s linear infinite}
+  .thin{stroke-width:1.8;stroke-dasharray:5 6}
+  @keyframes march{to{stroke-dashoffset:-16}}
+  .w-local{stroke:var(--local)} .w-flat{stroke:var(--flat)}
+  .pkt{filter:drop-shadow(0 0 4px currentColor)}
+  .p-local{fill:var(--local);color:var(--local)} .p-flat{fill:var(--flat);color:var(--flat)}
+  .lbl{font-size:11px;font-weight:700;fill:#334155;paint-order:stroke;stroke:#fff;stroke-width:3.4px;
+    stroke-linejoin:round;text-anchor:middle}
+  .sm{font-size:10px}
+  .loop{font-size:11.5px;font-weight:800;fill:var(--flat);text-anchor:middle;
+    paint-order:stroke;stroke:#fff;stroke-width:3.4px}
+  .warnnote{font-size:12.5px;font-weight:800;fill:var(--flat);text-anchor:middle;
+    paint-order:stroke;stroke:#fff;stroke-width:3.4px}
+
+  /* ---------- right side: live X-ray (from memory-illusion-demo) ---------- */
+  .xray{display:grid;grid-template-columns:1fr 1.12fr;gap:18px;min-height:560px}
+  .panel{background:#fff;border:1px solid var(--line);border-radius:18px;display:flex;
+    flex-direction:column;overflow:hidden;box-shadow:0 8px 24px rgba(15,23,42,.07)}
+  .panel-head{padding:12px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;
+    gap:10px;font-size:13.5px;font-weight:700;color:#475467;flex:none}
+  .badge{margin-left:auto;font-size:11px;font-weight:700;padding:4px 10px;border-radius:999px;letter-spacing:.04em}
+  .badge.user-view{background:#e8f6f0;color:#12805c}
+  .badge.xray-view{background:#fdf0ee;color:var(--oracle)}
+  .panel-body{flex:1;padding:14px 16px;overflow:hidden;display:flex;flex-direction:column;gap:10px}
+  #chat-body{justify-content:flex-end}
+  .bubble{max-width:85%;padding:9px 13px;border-radius:13px;font-size:13.5px;line-height:1.4;
+    opacity:0;transform:translateY(10px);transition:.4s ease}
+  .bubble.show{opacity:1;transform:none}
+  .bubble.u{align-self:flex-end;background:var(--navy);color:#fff;border-bottom-right-radius:4px;position:relative}
+  .bubble.a{align-self:flex-start;background:var(--ground);border:1px solid var(--line);border-bottom-left-radius:4px}
+  .msgnum{position:absolute;left:-27px;top:50%;transform:translateY(-50%);
+    background:var(--flat);color:#fff;font-size:10.5px;font-weight:800;
+    width:21px;height:21px;border-radius:50%;display:flex;align-items:center;
+    justify-content:center;box-shadow:0 2px 6px rgba(220,38,38,.35)}
+  .wirefont{font-family:var(--mono);font-size:12px}
+  .send-label{font-size:11.5px;font-weight:800;letter-spacing:.07em;color:var(--oracle);
+    display:flex;align-items:center;gap:8px;margin-bottom:2px}
+  .send-label .pulse{width:8px;height:8px;border-radius:50%;background:var(--oracle);animation:pulse 1.2s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(199,70,52,.5)}70%{box-shadow:0 0 0 8px rgba(199,70,52,0)}100%{box-shadow:0 0 0 0 rgba(199,70,52,0)}}
+  .turnpill{font-size:11.5px;font-weight:700;background:var(--ground);border:1px solid var(--line);
+    border-radius:999px;padding:3px 11px;color:#475467;margin-left:auto}
+  .payload{flex:1;display:flex;flex-direction:column;gap:5px;overflow:hidden;justify-content:flex-end}
+  .pblock{border-radius:8px;padding:6px 11px;font-family:var(--mono);font-size:11.5px;display:flex;
+    justify-content:space-between;align-items:center;gap:10px;opacity:0;transform:translateX(24px);
+    transition:opacity .3s,transform .3s;border:1px solid transparent;flex:none}
+  .pblock.in{opacity:1;transform:none}
+  .pblock.sys{background:#f2f4f7;color:#475467;border-color:var(--line)}
+  .pblock.pu{background:#eef4ff;color:#1849a9;border-color:#d6e4ff}
+  .pblock.pa{background:var(--ground);color:#475467;border-color:var(--line)}
+  .pblock .resend{font-size:9.5px;font-weight:800;color:var(--oracle);background:#fdf0ee;
+    border-radius:999px;padding:2px 8px;letter-spacing:.05em;white-space:nowrap}
+  .pblock .tk{color:#98a2b3;font-size:10.5px;white-space:nowrap}
+  .pblock .cum{color:var(--oracle);font-weight:800;font-size:10.5px;white-space:nowrap;
+    min-width:52px;text-align:right}
+  .wire-foot{flex:none;border-top:1px dashed var(--line);padding-top:10px;margin-top:4px;
+    display:flex;align-items:baseline;justify-content:space-between}
+  .wire-foot .cnt{font-family:var(--mono);font-size:28px;font-weight:800;color:var(--oracle);
+    font-variant-numeric:tabular-nums}
+  .wire-foot .lbl2{font-size:11.5px;color:#98a2b3;font-weight:600}
+  .xray-note{grid-column:1/-1;text-align:center;font-size:12px;color:var(--muted);font-weight:600;margin-top:-6px}
+
+  /* placeholder before step 3 */
+  .placeholder{display:flex;align-items:center;justify-content:center;min-height:560px;
+    border:2px dashed var(--line);border-radius:18px;color:#c2c9d4;font-size:15px;font-weight:700}
+
+  .pills{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:14px}
+  .pill{font-size:12.5px;font-weight:700;border-radius:999px;padding:7px 16px}
+  .pl-red{background:#fdf0ee;color:#7f1d1d}
+  .pl-navy{background:#eef2ff;color:#3730a3}
+
+  .stepper{display:flex;align-items:center;justify-content:center;gap:14px;margin-top:14px}
+  .stepper button{font:inherit;font-weight:800;font-size:15px;border:none;border-radius:999px;
+    padding:8px 18px;cursor:pointer;background:var(--flat);color:#fff;box-shadow:0 6px 14px -6px var(--flat)}
+  .stepper button:disabled{opacity:.35;cursor:default}
+  #stepLabel{font-size:14.5px;font-weight:800;min-width:360px;text-align:center}
+  #stepLabel small{display:block;font-weight:600;color:var(--muted);font-size:11.5px;margin-top:2px}
+  .hint{text-align:center;color:var(--muted);font-size:11px;margin-top:6px}
+
+  @media (max-width:1150px){
+    .stage{grid-template-columns:1fr}
+    .stage svg{max-width:420px;margin:0 auto}
+    .xray,.placeholder{min-height:480px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <span class="kicker">🔴 Demo 1 · flat history</span>
+  <h1>The way every chat app works — <span class="grad">until it gets expensive</span></h1>
+  <p class="sub">Left: the architecture. Right: an X-ray of what actually goes over the wire.</p>
+</header>
+
+<div class="stage">
+  <!-- ================= LEFT: architecture ================= -->
+  <svg viewBox="0 0 380 640" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+      <marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" fill="#94a3b8"/>
+      </marker>
+    </defs>
+
+    <rect class="zone" x="14" y="10" width="352" height="620"/>
+    <text class="zlabel" x="34" y="36">💻 Your Mac · live-demo/</text>
+
+    <g data-step="0" class="box b-local">
+      <rect x="85" y="56" width="210" height="88"/>
+      <text class="t" x="190" y="92">🎬 The script</text>
+      <text class="s" x="190" y="110">12 scripted turns</text>
+      <text class="f" x="190" y="128">conversation.py</text>
+    </g>
+
+    <g data-step="1">
+      <path id="wA" class="wire thin w-local" d="M190,144 L190,214" marker-end="url(#ah)"/>
+      <circle r="4" class="pkt p-local"><animateMotion dur="1.4s" repeatCount="indefinite"><mpath href="#wA"/></animateMotion></circle>
+      <text class="lbl sm" x="238" y="184">next user turn</text>
+      <g class="box b-flat">
+        <rect x="85" y="218" width="210" height="88"/>
+        <text class="t" x="190" y="254">🔴 Flat-history runner</text>
+        <text class="s" x="190" y="272">history = the prompt</text>
+        <text class="f" x="190" y="290">demo1_flat_history.py</text>
+      </g>
+    </g>
+
+    <g data-step="2">
+      <path id="wB" class="wire w-flat" d="M150,306 C130,360 130,400 150,452" marker-end="url(#ah)"/>
+      <circle r="5" class="pkt p-flat"><animateMotion dur="1.4s" repeatCount="indefinite"><mpath href="#wB"/></animateMotion></circle>
+      <circle r="5" class="pkt p-flat"><animateMotion dur="1.4s" begin="0.45s" repeatCount="indefinite"><mpath href="#wB"/></animateMotion></circle>
+      <circle r="5" class="pkt p-flat"><animateMotion dur="1.4s" begin="0.9s" repeatCount="indefinite"><mpath href="#wB"/></animateMotion></circle>
+      <text class="lbl" x="76" y="368" transform="rotate(-90 76 368)">ENTIRE transcript</text>
+
+      <path id="wC" class="wire thin w-flat" d="M230,452 C250,400 250,360 230,306" marker-end="url(#ah)"/>
+      <circle r="4" class="pkt p-flat"><animateMotion dur="1.8s" repeatCount="indefinite"><mpath href="#wC"/></animateMotion></circle>
+      <text class="lbl sm" x="306" y="368" transform="rotate(90 306 368)">reply appended</text>
+      <text class="loop" x="190" y="384">↻ 12 turns</text>
+
+      <g class="box b-llm">
+        <rect x="85" y="456" width="210" height="88"/>
+        <text class="t" x="190" y="492">🦙 llama3.1 : 8b</text>
+        <text class="s" x="190" y="510">stateless — remembers nothing</text>
+        <text class="f" x="190" y="528">ollama · :11434</text>
+      </g>
+    </g>
+
+    <g data-step="3">
+      <text class="warnnote" x="190" y="584">64 tk → 1,433 tk per request</text>
+      <text class="lbl sm" x="190" y="604">you pay to re-read turn 1… twelve times</text>
+    </g>
+  </svg>
+
+  <!-- ================= RIGHT: live X-ray (step 3) ================= -->
+  <div>
+    <div class="placeholder" data-step="0" id="ph">the X-ray appears here…</div>
+    <div class="xray off" data-step="3" id="xray" style="display:none">
+      <div class="panel">
+        <div class="panel-head">What you see <span class="badge user-view">CHAT APP</span></div>
+        <div class="panel-body" id="chat-body"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-head">🔍 What is actually sent <span class="badge xray-view">X-RAY</span></div>
+        <div class="panel-body wirefont">
+          <div class="send-label"><span class="pulse"></span>
+            <span id="send-text">SENDING — FULL HISTORY ATTACHED</span>
+            <span class="turnpill" id="turnpill">turn 0</span></div>
+          <div class="payload" id="payload"></div>
+          <div class="wire-foot">
+            <span class="lbl2">input tokens in this one request</span>
+            <span class="cnt" id="tok-cnt">0</span>
+          </div>
+        </div>
+      </div>
+      <div class="xray-note">the full 12-turn run — the counter ends exactly where the real demo does: <b style="color:var(--oracle)">1,433 tk</b>, then freezes · press ← then → to replay</div>
+    </div>
+  </div>
+</div>
+
+<div class="pills off" data-step="3">
+  <span class="pill pl-red">🔴 every message re-uploads the entire past</span>
+  <span class="pill pl-red">📈 64 → 1,433 tk per request · 9,085 tk total</span>
+  <span class="pill pl-navy">🧊 the model is frozen — close the tab, it forgets you existed</span>
+</div>
+
+<div class="stepper">
+  <button id="prev">‹ Prev</button>
+  <div id="stepLabel"></div>
+  <button id="next">Next ›</button>
+  <button id="pauseBtn" style="background:var(--navy)">⏸ Pause chat</button>
+</div>
+<div class="hint">← / → arrow keys · <b>p</b> = pause/resume the chat · full-screen &amp; screen-record while you narrate</div>
+</div>
+
+<script>
+/* ================= stepper ================= */
+const steps = [
+  {t:"The setup", d:"one scripted 12-turn conversation — conversation.py"},
+  {t:"Demo 1 — flat history", d:"conversation state lives inside the prompt itself"},
+  {t:"The loop", d:"every turn goes to a stateless local llama — and the reply comes back into the history"},
+  {t:"X-ray — the problem, live", d:"watch the counter: 64 tk on turn 1 → 1,433 tk by turn 12 — linear growth, quadratic total cost"},
+];
+let cur = 0;
+const prevB = document.getElementById('prev'), nextB = document.getElementById('next'),
+      label = document.getElementById('stepLabel');
+function apply(){
+  document.querySelectorAll('[data-step]').forEach(el=>{
+    const s = +el.dataset.step;
+    el.classList.toggle('off', s > cur);
+    el.classList.toggle('fresh', s === cur);
+  });
+  // placeholder swaps for the x-ray at step 3
+  document.getElementById('ph').style.display = cur >= 3 ? 'none' : 'flex';
+  document.getElementById('xray').style.display = cur >= 3 ? 'grid' : 'none';
+  if(cur >= 3) startXray(); else stopXray();
+  label.innerHTML = `Step ${cur+1} / ${steps.length} — ${steps[cur].t}<small>${steps[cur].d}</small>`;
+  prevB.disabled = cur === 0; nextB.disabled = cur === steps.length-1;
+}
+prevB.onclick = ()=>{ if(cur>0){cur--;apply();} };
+nextB.onclick = ()=>{ if(cur<steps.length-1){cur++;apply();} };
+document.addEventListener('keydown', e=>{
+  if(e.key==='ArrowRight') nextB.onclick();
+  if(e.key==='ArrowLeft') prevB.onclick();
+  if(e.key==='p'||e.key==='P') togglePause();
+});
+
+/* ================= auto-playing X-ray (from memory-illusion-demo) ================= */
+/* the REAL 12-turn script from conversation.py — token counts calibrated so
+   turn 1 sends exactly 64 tk and the turn-12 send is exactly 1,433 tk,
+   matching demo1_flat_history.py's measured output */
+const convo = [
+  {role:'u', text:"Hi! I'm planning a 5-day Tokyo trip in November. I'm vegetarian, and I always prefer window seats on flights. Budget ~$2,000.", tk:26},
+  {role:'a', text:"Great! November is beautiful. For vegetarians, I'd start with shojin-ryori temple cuisine and Ain Soph in Ginza…", tk:95},
+  {role:'u', text:"Which neighborhoods should I consider staying in?", tk:11},
+  {role:'a', text:"Shinjuku for transit links, Asakusa for old-Tokyo charm, Shimokitazawa for indie vibes — all within your budget…", tk:100},
+  {role:'u', text:"I love photography — where can I catch great sunrise shots?", tk:13},
+  {role:'a', text:"Head to the Sumida River at dawn, or the Tokyo Metropolitan Building's free north deck…", tk:105},
+  {role:'u', text:"Are there any day trips from Tokyo really worth it?", tk:12},
+  {role:'a', text:"Three great options: Nikko for shrines, Kamakura for the Great Buddha, Hakone for Fuji views and onsen…", tk:110},
+  {role:'u', text:"One update: my partner Ankita is joining me. She's allergic to peanuts.", tk:22},
+  {role:'a', text:"Noted — I'll flag Ankita's peanut allergy on every restaurant suggestion from here on…", tk:115},
+  {role:'u', text:"Given our food restrictions, which street-food areas work for us?", tk:15},
+  {role:'a', text:"Yanaka Ginza and Asakusa's Nakamise are friendly for vegetarian, peanut-free snacking…", tk:110},
+  {role:'u', text:"Best way to get from Narita airport into the city?", tk:14},
+  {role:'a', text:"Take the Narita Express — about 55 minutes to Shinjuku, seat reservations included…", tk:120},
+  {role:'u', text:"What should we book in advance vs. figure out on the spot?", tk:13},
+  {role:'a', text:"Book flights, the hotel and teamLab tickets now; leave restaurants and day trips flexible…", tk:115},
+  {role:'u', text:"How cold is Tokyo in November — what should we pack?", tk:12},
+  {role:'a', text:"Expect 6–12°C. Pack layers, a warm jacket, and comfortable walking shoes…", tk:120},
+  {role:'u', text:"Can you plan our day 1 in detail, morning to night?", tk:12},
+  {role:'a', text:"Day 1: sunrise at Senso-ji, breakfast in Asakusa, the national museum, Shibuya at dusk…", tk:110},
+  {role:'u', text:"Quick check — what food restrictions do Ankita and I have?", tk:14},
+  {role:'a', text:"You're vegetarian, and Ankita is allergic to peanuts — I'm tracking both…", tk:115},
+  {role:'u', text:"Perfect. And which seat should you pick for my flight home?", tk:16},
+];
+const SYS_TK = 38;
+const chatBody = document.getElementById('chat-body');
+const payloadEl = document.getElementById('payload');
+const tokCnt = document.getElementById('tok-cnt');
+const turnpill = document.getElementById('turnpill');
+let xTimer = null, xIdx = -1, subTimers = [];
+let xPaused = false, xPendingTick = null;
+const pauseBtn = document.getElementById('pauseBtn');
+
+function updatePauseBtn(){
+  pauseBtn.textContent = xPaused ? '▶ Resume chat' : '⏸ Pause chat';
+  pauseBtn.style.background = xPaused ? 'var(--flat)' : 'var(--navy)';
+}
+function togglePause(){
+  xPaused = !xPaused;
+  updatePauseBtn();
+  if(!xPaused && xPendingTick){            // resume exactly where we stopped
+    const t = xPendingTick; xPendingTick = null;
+    xTimer = setTimeout(t, 250);
+  }
+}
+pauseBtn.onclick = togglePause;
+
+function animateCount(el, to, ms){
+  const t0 = performance.now();
+  function step(t){
+    const p = Math.min(1,(t-t0)/ms), v = Math.round(to*(1-Math.pow(1-p,3)));
+    el.textContent = v.toLocaleString();
+    if(p<1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+function renderTurn(idx){
+  // chat side: messages 0..idx — user messages get a red #1..#12 badge
+  chatBody.innerHTML='';
+  let un=0;
+  for(let i=0;i<=idx;i++){
+    const b=document.createElement('div');
+    b.className='bubble '+convo[i].role+' show';
+    b.textContent=convo[i].text;
+    if(convo[i].role==='u'){
+      un++;
+      const n=document.createElement('span');
+      n.className='msgnum'; n.textContent=un;
+      b.appendChild(n);
+    }
+    chatBody.appendChild(b);
+  }
+  // payload side: rebuild full stack (the point!)
+  subTimers.forEach(clearTimeout); subTimers=[];
+  payloadEl.innerHTML='';
+  const isSend = convo[idx].role==='u';
+  turnpill.textContent = 'turn '+convo.slice(0,idx+1).filter(m=>m.role==='u').length;
+  document.getElementById('send-text').textContent =
+    isSend ? 'SENDING — FULL HISTORY ATTACHED' : 'RESPONSE RECEIVED';
+  const blocks=[{cls:'sys',label:'system prompt · instructions & tools',tk:SYS_TK,res:false}];
+  let pn=0;
+  for(let i=0;i<=idx;i++){
+    if(convo[i].role==='u') pn++;
+    blocks.push({cls:convo[i].role==='u'?'pu':'pa',
+      label:(convo[i].role==='u'?'you #'+pn+' · ':'assistant · ')+'"'+convo[i].text.slice(0,28)+'…"',
+      tk:convo[i].tk, res:i<idx});
+  }
+  let total=0;
+  blocks.forEach((blk,i)=>{
+    total+=blk.tk;
+    const div=document.createElement('div');
+    div.className='pblock '+blk.cls;
+    div.innerHTML='<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+blk.label+'</span>'
+      +(blk.res?'<span class="resend">RE-SENT</span>':'')
+      +'<span class="tk">+'+blk.tk+'</span>'
+      +'<span class="cum">= '+total.toLocaleString()+'</span>';
+    payloadEl.appendChild(div);
+    subTimers.push(setTimeout(()=>div.classList.add('in'), (isSend?80:30)*i));
+  });
+  animateCount(tokCnt, total, (isSend?80:30)*blocks.length+300);
+}
+
+function startXray(){
+  if(xTimer || xPendingTick) return; // already running (or paused mid-run)
+  xIdx = -1;
+  const tick = ()=>{
+    if(xPaused){ xPendingTick = tick; xTimer = null; return; }
+    xIdx++;
+    if(xIdx >= convo.length){        // freeze on the turn-12 frame
+      xTimer = null;                 // (go back a step and forward to replay)
+      tokCnt.textContent = convo.reduce((a,m)=>a+m.tk, SYS_TK).toLocaleString();
+      return;
+    }
+    renderTurn(xIdx);
+    // first 4 turns at narration pace, then fast-forward to turn 12
+    const fast = xIdx >= 8;
+    xTimer = setTimeout(tick, fast ? 1050 : (convo[xIdx].role==='u' ? 2600 : 2000));
+  };
+  xTimer = setTimeout(tick, 400);
+}
+function stopXray(){
+  clearTimeout(xTimer); xTimer=null;
+  xPaused=false; xPendingTick=null; updatePauseBtn();
+  subTimers.forEach(clearTimeout); subTimers=[];
+}
+apply();
+</script>
+</body>
+</html>

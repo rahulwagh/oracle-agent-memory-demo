@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent Memory demo · Step-by-step architecture</title>
+<style>
+  :root{
+    --ink:#0f172a; --muted:#64748b; --bg:#f8fafc;
+    --local:#6366f1;          /* your Mac / scripts */
+    --llm:#f59e0b;            /* Ollama */
+    --mem:#12805c;            /* memory layer / demo2 lane */
+    --oracle:#c74634;         /* Oracle DB + flat-history problem lane */
+    --flat:#dc2626;           /* demo1 problem wires */
+    --ret:#0ea5e9;            /* context-card return */
+    --sql:#7c3aed;            /* SQL reveal */
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+    color:var(--ink);
+    background:
+      radial-gradient(1100px 520px at 85% -10%, #fdf0ee 0%, transparent 60%),
+      radial-gradient(900px 480px at -5% 115%, #eef2ff 0%, transparent 55%),
+      var(--bg);
+    padding:24px 18px 40px}
+  .wrap{max-width:1500px;margin:0 auto}
+  header{text-align:center;margin-bottom:6px}
+  .kicker{display:inline-flex;align-items:center;gap:8px;font-size:11.5px;font-weight:700;
+    letter-spacing:.14em;text-transform:uppercase;color:#fff;background:var(--oracle);
+    padding:5px 13px;border-radius:999px;box-shadow:0 8px 20px -8px var(--oracle)}
+  h1{font-size:29px;margin:12px 0 4px;font-weight:800;letter-spacing:-.02em}
+  h1 .grad{background:linear-gradient(90deg,var(--flat),var(--mem));
+    -webkit-background-clip:text;background-clip:text;color:transparent}
+  .sub{color:var(--muted);font-size:14px;margin:0}
+  svg{width:100%;height:auto;display:block;margin-top:4px}
+
+  .stepper{display:flex;align-items:center;justify-content:center;gap:14px;margin-top:12px}
+  .stepper button{font:inherit;font-weight:800;font-size:15px;border:none;border-radius:999px;
+    padding:8px 18px;cursor:pointer;background:var(--oracle);color:#fff;
+    box-shadow:0 6px 14px -6px var(--oracle)}
+  .stepper button:disabled{opacity:.35;cursor:default}
+  #stepLabel{font-size:14.5px;font-weight:800;min-width:360px;text-align:center}
+  #stepLabel small{display:block;font-weight:600;color:var(--muted);font-size:11.5px;margin-top:2px}
+  .hint{text-align:center;color:var(--muted);font-size:11px;margin-top:6px}
+
+  [data-step]{transition:opacity .55s ease}
+  [data-step].off{opacity:0;pointer-events:none}
+  [data-step].fresh{animation:fadeIn .9s ease}
+  @keyframes fadeIn{from{opacity:0}}
+
+  .box rect{fill:#fff;rx:14;filter:drop-shadow(0 10px 18px rgba(15,23,42,.12));stroke-width:2}
+  .box .t{font-size:14.5px;font-weight:800;fill:var(--ink);text-anchor:middle}
+  .box .s{font-size:10.8px;fill:var(--muted);text-anchor:middle}
+  .box .f{font-size:10px;font-weight:600;fill:#475569;font-family:ui-monospace,Menlo,monospace;text-anchor:middle}
+  .b-local rect{stroke:var(--local)} .b-flat rect{stroke:var(--flat)}
+  .b-mem rect{stroke:var(--mem)} .b-llm rect{stroke:var(--llm)}
+  .b-db rect{stroke:var(--oracle)} .b-sql rect{stroke:var(--sql)}
+
+  .zone{fill:#ffffff;opacity:.55;stroke-width:1.5;stroke-dasharray:2 5;rx:20}
+  .z-local{stroke:var(--local)} .z-llm{stroke:var(--llm)}
+  .z-mem{stroke:var(--mem)} .z-db{stroke:var(--oracle)}
+  .zlabel{font-size:11.5px;font-weight:800;letter-spacing:.12em;text-transform:uppercase}
+  .zl-local{fill:var(--local)} .zl-llm{fill:#b45309} .zl-mem{fill:var(--mem)} .zl-db{fill:var(--oracle)}
+
+  .wire{fill:none;stroke-width:2.6;stroke-linecap:round;stroke-dasharray:8 8;animation:march 1s linear infinite}
+  .thin{stroke-width:1.8;stroke-dasharray:5 6}
+  @keyframes march{to{stroke-dashoffset:-16}}
+  .w-local{stroke:var(--local)} .w-flat{stroke:var(--flat)} .w-mem{stroke:var(--mem)}
+  .w-llm{stroke:var(--llm)} .w-db{stroke:var(--oracle)} .w-ret{stroke:var(--ret)} .w-sql{stroke:var(--sql)}
+  .pkt{filter:drop-shadow(0 0 4px currentColor)}
+  .p-flat{fill:var(--flat);color:var(--flat)} .p-mem{fill:var(--mem);color:var(--mem)}
+  .p-llm{fill:var(--llm);color:var(--llm)} .p-db{fill:var(--oracle);color:var(--oracle)}
+  .p-ret{fill:var(--ret);color:var(--ret)} .p-sql{fill:var(--sql);color:var(--sql)}
+  .p-local{fill:var(--local);color:var(--local)}
+
+  .lbl{font-size:11px;font-weight:700;fill:#334155;paint-order:stroke;stroke:#fff;stroke-width:3.4px;
+    stroke-linejoin:round;text-anchor:middle}
+  .sm{font-size:9.8px}
+  .loop{font-size:11px;font-weight:800;text-anchor:middle;paint-order:stroke;stroke:#fff;stroke-width:3.4px}
+  .loop.red{fill:var(--flat)} .loop.green{fill:var(--mem)}
+  .warnnote{font-size:11px;font-weight:800;fill:var(--flat);text-anchor:middle;
+    paint-order:stroke;stroke:#fff;stroke-width:3.4px}
+
+  .pills{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:10px}
+  .pill{font-size:12.5px;font-weight:700;border-radius:999px;padding:7px 16px}
+  .pl-red{background:#fdf0ee;color:#7f1d1d}
+  .pl-green{background:#e8f6f0;color:#065f46}
+  .pl-navy{background:#eef2ff;color:#3730a3}
+  .pl-purple{background:#f3e8ff;color:#5b21b6}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <span class="kicker">🧠 Oracle Agent Memory · live demo</span>
+  <h1>One conversation, <span class="grad">two ways to remember it</span></h1>
+  <p class="sub">Follow the packets — flat history re-uploads the past; the memory layer stores it as rows.</p>
+</header>
+
+<svg viewBox="0 0 1300 690" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#94a3b8"/>
+    </marker>
+  </defs>
+
+  <!-- ============ ZONES (always visible) ============ -->
+  <rect class="zone z-local" x="24" y="66" width="286" height="596"/>
+  <text class="zlabel zl-local" x="44" y="90">💻 Your Mac · live-demo/</text>
+
+  <rect class="zone z-llm" x="520" y="66" width="256" height="252"/>
+  <text class="zlabel zl-llm" x="540" y="90">🧠 Ollama · 100% local</text>
+
+  <rect class="zone z-mem" x="468" y="400" width="240" height="180"/>
+  <text class="zlabel zl-mem" x="488" y="424">📦 Memory layer</text>
+
+  <rect class="zone z-db" x="950" y="120" width="330" height="440"/>
+  <text class="zlabel zl-db" x="970" y="144">🗄 Oracle AI Database · Docker</text>
+
+  <!-- ============ STEP 0 · the script ============ -->
+  <g data-step="0" class="box b-local">
+    <rect x="60" y="104" width="210" height="86"/>
+    <text class="t" x="165" y="140">🎬 The script</text>
+    <text class="s" x="165" y="158">same 12 turns, both demos</text>
+    <text class="f" x="165" y="176">conversation.py</text>
+  </g>
+
+  <!-- ============ STEP 1 · demo 1 ============ -->
+  <g data-step="1">
+    <g class="box b-flat">
+      <rect x="60" y="228" width="210" height="86"/>
+      <text class="t" x="165" y="264">🔴 Demo 1 · flat history</text>
+      <text class="s" x="165" y="282">history = the prompt</text>
+      <text class="f" x="165" y="300">demo1_flat_history.py</text>
+    </g>
+    <path id="w1" class="wire thin w-local" d="M165,190 L165,228" marker-end="url(#ah)"/>
+    <circle r="4" class="pkt p-local"><animateMotion dur="1.4s" repeatCount="indefinite"><mpath href="#w1"/></animateMotion></circle>
+  </g>
+
+  <!-- ============ STEP 2 · flat loop to Ollama ============ -->
+  <g data-step="2">
+    <path id="w2" class="wire w-flat" d="M270,254 C380,244 440,190 520,164" marker-end="url(#ah)"/>
+    <circle r="5" class="pkt p-flat"><animateMotion dur="1.5s" repeatCount="indefinite"><mpath href="#w2"/></animateMotion></circle>
+    <circle r="5" class="pkt p-flat"><animateMotion dur="1.5s" begin="0.5s" repeatCount="indefinite"><mpath href="#w2"/></animateMotion></circle>
+    <circle r="5" class="pkt p-flat"><animateMotion dur="1.5s" begin="1s" repeatCount="indefinite"><mpath href="#w2"/></animateMotion></circle>
+    <text class="lbl" x="390" y="196">ENTIRE transcript — every turn</text>
+    <path id="w2r" class="wire thin w-flat" d="M520,196 C440,230 380,280 270,292" marker-end="url(#ah)"/>
+    <circle r="4" class="pkt p-flat"><animateMotion dur="1.9s" repeatCount="indefinite"><mpath href="#w2r"/></animateMotion></circle>
+    <text class="lbl sm" x="392" y="272">reply appended → history grows</text>
+    <text class="loop red" x="392" y="234">↻ 12 turns</text>
+  </g>
+
+  <!-- ============ STEP 3 · the problem ============ -->
+  <g data-step="3">
+    <text class="warnnote" x="165" y="342">64 tk → 1,433 tk per request</text>
+    <text class="lbl sm" x="165" y="360">you pay to re-read turn 1… twelve times</text>
+  </g>
+
+  <!-- ============ SHARED · Ollama boxes (step 2) ============ -->
+  <g data-step="2">
+    <g class="box b-llm">
+      <rect x="545" y="104" width="206" height="86"/>
+      <text class="t" x="648" y="140">🦙 llama3.1 : 8b</text>
+      <text class="s" x="648" y="158">chat + extraction LLM</text>
+      <text class="f" x="648" y="176">ollama · :11434</text>
+    </g>
+  </g>
+  <g data-step="6">
+    <g class="box b-llm">
+      <rect x="545" y="228" width="206" height="70"/>
+      <text class="t" x="648" y="258">🧭 nomic-embed-text</text>
+      <text class="s" x="648" y="276">768-dim vectors, local</text>
+    </g>
+  </g>
+
+  <!-- ============ STEP 4 · demo 2 ============ -->
+  <g data-step="4">
+    <g class="box b-mem">
+      <rect x="60" y="430" width="210" height="86"/>
+      <text class="t" x="165" y="466">🟢 Demo 2 · memory</text>
+      <text class="s" x="165" y="484">history lives in the database</text>
+      <text class="f" x="165" y="502">demo2_agent_memory.py</text>
+    </g>
+    <path id="w3" class="wire thin w-local" d="M100,190 C48,280 48,350 100,430" marker-end="url(#ah)"/>
+    <circle r="4" class="pkt p-local"><animateMotion dur="2s" repeatCount="indefinite"><mpath href="#w3"/></animateMotion></circle>
+    <text class="lbl sm" x="52" y="316" transform="rotate(-90 52 316)">same 12 turns</text>
+  </g>
+
+  <!-- ============ STEP 5 · the memory client ============ -->
+  <g data-step="5">
+    <g class="box b-mem">
+      <rect x="488" y="440" width="200" height="120"/>
+      <text class="t" x="588" y="476">📦 OracleAgentMemory</text>
+      <text class="s" x="588" y="494">threads · extraction · search</text>
+      <text class="s" x="588" y="510">scope: user · agent · thread</text>
+      <text class="f" x="588" y="530">pip install oracleagentmemory</text>
+    </g>
+    <path id="w4" class="wire w-mem" d="M270,473 L488,483" marker-end="url(#ah)"/>
+    <circle r="5" class="pkt p-mem"><animateMotion dur="1.3s" repeatCount="indefinite"><mpath href="#w4"/></animateMotion></circle>
+    <text class="lbl" x="378" y="464">add_messages( turn )</text>
+  </g>
+
+  <!-- ============ STEP 6 · persist + extract ============ -->
+  <g data-step="6">
+    <g class="box b-db">
+      <rect x="985" y="300" width="262" height="150"/>
+      <text class="t" x="1116" y="336">Oracle AI Database</text>
+      <text class="s" x="1116" y="356">MESSAGE · THREAD · ACTOR_PROFILE</text>
+      <text class="s" x="1116" y="372">MEMORY · RECORD_CHUNKS (VECTOR)</text>
+      <text class="f" x="1116" y="394">container: oracle26ai · FREEPDB1</text>
+      <text class="f" x="1116" y="410">user: memdemo</text>
+    </g>
+    <path id="w5" class="wire w-db" d="M688,470 C810,462 890,420 985,392" marker-end="url(#ah)"/>
+    <circle r="5" class="pkt p-db"><animateMotion dur="1.6s" repeatCount="indefinite"><mpath href="#w5"/></animateMotion></circle>
+    <text class="lbl" x="836" y="428">INSERT raw MESSAGE rows</text>
+
+    <path id="w6" class="wire w-llm" d="M540,440 C500,360 520,250 545,200" marker-end="url(#ah)"/>
+    <circle r="5" class="pkt p-llm"><animateMotion dur="1.7s" repeatCount="indefinite"><mpath href="#w6"/></animateMotion></circle>
+    <text class="lbl sm" x="478" y="330" >extraction policy → keep facts,</text>
+    <text class="lbl sm" x="478" y="344">drop noise &amp; secrets</text>
+
+    <path id="w7" class="wire thin w-llm" d="M636,440 C640,390 644,340 648,298" marker-end="url(#ah)"/>
+    <circle r="4" class="pkt p-llm"><animateMotion dur="1.4s" repeatCount="indefinite"><mpath href="#w7"/></animateMotion></circle>
+    <text class="lbl sm" x="690" y="366">embed</text>
+
+    <path id="w8" class="wire w-db" d="M688,530 C830,536 910,500 1000,450" marker-end="url(#ah)"/>
+    <circle r="5" class="pkt p-db"><animateMotion dur="1.8s" repeatCount="indefinite"><mpath href="#w8"/></animateMotion></circle>
+    <text class="lbl" x="868" y="520">typed rows: fact · preference · guideline</text>
+    <text class="lbl sm" x="868" y="536">scoped by user_id / agent_id / thread_id</text>
+  </g>
+
+  <!-- ============ STEP 7 · context card + bounded prompt ============ -->
+  <g data-step="7">
+    <path id="w9" class="wire w-ret" d="M985,340 C840,300 760,380 688,440" marker-end="url(#ah)"/>
+    <circle r="5" class="pkt p-ret"><animateMotion dur="1.7s" repeatCount="indefinite"><mpath href="#w9"/></animateMotion></circle>
+    <text class="lbl" x="836" y="330">vector search + summary</text>
+
+    <path id="w10" class="wire w-ret" d="M488,520 C300,540 240,520 200,516" marker-end="url(#ah)"/>
+    <circle r="5" class="pkt p-ret"><animateMotion dur="1.4s" repeatCount="indefinite"><mpath href="#w10"/></animateMotion></circle>
+    <text class="lbl" x="348" y="548">context card ≈ 350 tk</text>
+
+    <path id="w11" class="wire w-mem" d="M200,430 C260,330 400,190 545,146" marker-end="url(#ah)"/>
+    <circle r="5" class="pkt p-mem"><animateMotion dur="1.8s" repeatCount="indefinite"><mpath href="#w11"/></animateMotion></circle>
+    <text class="lbl" x="352" y="256">card + new question only</text>
+    <text class="loop green" x="352" y="290">↻ 12 turns · stays ≈ 500 tk</text>
+  </g>
+
+  <!-- ============ STEP 8 · SQL reveal ============ -->
+  <g data-step="8">
+    <g class="box b-sql">
+      <rect x="60" y="576" width="210" height="70"/>
+      <text class="t" x="165" y="604">🔍 The reveal</text>
+      <text class="f" x="165" y="624">show_memories.py · SELECT *</text>
+    </g>
+    <path id="w12" class="wire w-sql" d="M270,614 C620,668 900,600 1020,450" marker-end="url(#ah)"/>
+    <circle r="5" class="pkt p-sql"><animateMotion dur="2.2s" repeatCount="indefinite"><mpath href="#w12"/></animateMotion></circle>
+    <text class="lbl" x="660" y="642">"Memory updated" = rows you can SELECT</text>
+  </g>
+</svg>
+
+<!-- ============ STEP 9 · beats ============ -->
+<div class="pills" data-step="9">
+  <span class="pill pl-red">🔴 flat history · 1,433 tk by turn 12 — pay to re-read your own past</span>
+  <span class="pill pl-green">🟢 memory layer · ≈ 500 tk, flat — 2.7× fewer, gap widens every turn</span>
+  <span class="pill pl-navy">🗄 memory = scoped, SELECT-able rows — not a bigger prompt</span>
+  <span class="pill pl-purple">📉 plot_comparison.py → your own Figure 5</span>
+</div>
+
+<div class="stepper">
+  <button id="prev">‹ Prev</button>
+  <div id="stepLabel"></div>
+  <button id="next">Next ›</button>
+</div>
+<div class="hint">← / → arrow keys work too · full-screen &amp; screen-record while you narrate</div>
+</div>
+
+<script>
+const steps = [
+  {t:"The setup", d:"one scripted 12-turn conversation — identical input for both demos"},
+  {t:"Demo 1 — flat history", d:"the way almost every chat app works today"},
+  {t:"Every turn, EVERYTHING is re-sent", d:"the model is stateless — the app replays the whole transcript"},
+  {t:"The problem", d:"64 → 1,433 tokens per request; linear growth, quadratic total cost"},
+  {t:"Demo 2 — same script, memory layer", d:"conversation state moves out of the prompt"},
+  {t:"OracleAgentMemory client", d:"the pip package: threads, extraction, scoped search"},
+  {t:"Persist + extract", d:"raw messages become rows; an extraction LLM distills typed, scoped memories"},
+  {t:"The bounded prompt", d:"context card (≈350 tk) + the new question — that's ALL the model sees"},
+  {t:"The reveal — it's a database", d:"plain SQL shows your memories as rows"},
+  {t:"The payoff", d:"2.7× fewer tokens at turn 12 — and the gap grows with every turn"},
+];
+let cur = 0;
+const prev = document.getElementById('prev'), next = document.getElementById('next'),
+      label = document.getElementById('stepLabel');
+function apply(){
+  document.querySelectorAll('[data-step]').forEach(el=>{
+    const s = +el.dataset.step;
+    el.classList.toggle('off', s > cur);
+    el.classList.toggle('fresh', s === cur);
+  });
+  label.innerHTML = `Step ${cur+1} / ${steps.length} — ${steps[cur].t}<small>${steps[cur].d}</small>`;
+  prev.disabled = cur === 0; next.disabled = cur === steps.length-1;
+}
+prev.onclick = ()=>{ if(cur>0){cur--;apply();} };
+next.onclick = ()=>{ if(cur<steps.length-1){cur++;apply();} };
+document.addEventListener('keydown', e=>{
+  if(e.key==='ArrowRight') next.onclick();
+  if(e.key==='ArrowLeft') prev.onclick();
+});
+apply();
+</script>
+</body>
+</html>

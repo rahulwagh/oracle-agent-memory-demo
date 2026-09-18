@@ -1,0 +1,25 @@
+# --- never publish: campaign briefs, contracts, internal material ---
+final-briefs/
+other-briefs/
+brief-todo/
+*.pdf
+
+# --- never publish: narration scripts & video planning notes ---
+agent-memory-use-case/demo/*.md
+
+# --- local environments & IDE ---
+.venv/
+wvenv/
+rvenv/
+.idea/
+__pycache__/
+*.pyc
+.DS_Store
+
+# --- generated run artifacts (reproducible) ---
+agent-memory-use-case/live-demo/*_out.txt
+agent-memory-use-case/live-demo/plot_out.txt
+agent-memory-use-case/live-demo/flat_log.json
+agent-memory-use-case/live-demo/memory_log.json
+agent-memory-use-case/live-demo/token_comparison.png
+*.log
