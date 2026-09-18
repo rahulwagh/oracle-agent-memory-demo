@@ -10,29 +10,19 @@ come from**. If you only remember one thing, remember the three jobs:
 > **store** the chat → `add_messages()` · **distill** the facts → an extraction
 > policy · **find** them → `get_context_card()`
 
+## The file at a glance
+
+Before diving into the lines — the whole file, code on the left, meaning on
+the right:
+
+![Code map of demo2_agent_memory.py: the extraction policy, build_memory, the clean-slate setup, the store/find loop, and the final search reveal — each block annotated in plain language](img/d2-code-map.png)
+
 ## The big picture — one conversation turn
 
-Every turn of the conversation flows like this:
+Every turn flows like this (numbers = order of events; the same sequence
+repeats for all 12 turns):
 
-```mermaid
-sequenceDiagram
-    autonumber
-    participant App as demo2_agent_memory.py
-    participant Mem as OracleAgentMemory
-    participant DB as Oracle AI Database
-    participant LLM as Llama 3.1 (Ollama)
-
-    App->>Mem: add_messages(user question)
-    Mem->>DB: INSERT raw MESSAGE row
-    Mem->>LLM: (every 2 msgs) extract facts per policy
-    Mem->>DB: INSERT typed MEMORY rows (fact/preference)
-    App->>Mem: get_context_card()
-    Mem->>DB: vector search + summary (scoped to user/thread)
-    DB-->>App: context card ≈ 350 tokens
-    App->>LLM: system + card + NEW QUESTION only (≈500 tk)
-    LLM-->>App: answer
-    App->>Mem: add_messages(answer) → another row
-```
+![Sequence diagram of one turn: the app stores the question as a row, the extraction LLM distills facts into typed MEMORY rows, get_context_card runs a meaning-search and returns a capped cheat-sheet, and the model receives only cheat-sheet plus question — about 500 tokens](img/d2-sequence.png)
 
 Note what **never** happens: the full transcript is never sent to the model.
 That is the entire trick. Compare with demo 1, where the transcript **is** the
