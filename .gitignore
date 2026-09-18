@@ -23,3 +23,4 @@ agent-memory-use-case/live-demo/flat_log.json
 agent-memory-use-case/live-demo/memory_log.json
 agent-memory-use-case/live-demo/token_comparison.png
 *.log
+.claude/
