@@ -1,5 +1,8 @@
 # `demo2_agent_memory.py` — the complete breakdown
 
+> 🖼 Prefer pictures? The same story in 7 slides, zero jargon:
+> [demo2-visual-walkthrough.md](demo2-visual-walkthrough.md)
+
 This is a guided tour of [the demo-2 source](../agent-memory-use-case/live-demo/demo2_agent_memory.py),
 top to bottom — what every block does, and exactly **where the token savings
 come from**. If you only remember one thing, remember the three jobs:
