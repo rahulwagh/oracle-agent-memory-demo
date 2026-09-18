@@ -51,6 +51,12 @@ python3.12 -m venv .venv && ./.venv/bin/pip install oracleagentmemory rich matpl
 Full details, config, and a known-limitations section:
 [`agent-memory-use-case/live-demo/README.md`](agent-memory-use-case/live-demo/README.md)
 
+**📖 Want to understand every line?**
+[`docs/demo2-agent-memory-breakdown.md`](docs/demo2-agent-memory-breakdown.md)
+walks through `demo2_agent_memory.py` block by block — the extraction policy,
+the three ingredients, the bounded prompt, and the exact math of why the token
+count stays flat.
+
 ## The explainer decks
 
 Self-contained HTML slides (open in a browser, arrow keys to step) in
