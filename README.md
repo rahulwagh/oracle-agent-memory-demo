@@ -34,25 +34,25 @@ is just this:
 
 ![Memory updated is a database write — SELECT from the MEMORY table shows the extracted preference and fact rows](docs/img/sql-reveal.png)
 
-## Run it
+## Getting started
 
-> 🧰 Fresh machine? Follow the full step-by-step
-> [installation instructions](installation-instructions.md) — Docker image,
-> Ollama models, Python env, smoke tests, troubleshooting.
+Setup is one guided document — **[installation-instructions.md](installation-instructions.md)**.
+It takes a fresh machine to a working demo in ~15 minutes (mostly downloads):
+the free Oracle AI Database container, the two local Ollama models, and the
+Python environment — with a **Verify** check at every step and a
+troubleshooting section for the usual suspects.
+
+Once installed, the whole story is four commands (from
+`agent-memory-use-case/live-demo/`, venv active):
 
 ```bash
-cd agent-memory-use-case/live-demo
-bash setup_db.sh                       # Oracle AI Database Free (Docker) + demo user
-ollama pull llama3.1:8b && ollama pull nomic-embed-text
-python3.12 -m venv .venv && ./.venv/bin/pip install oracleagentmemory rich matplotlib requests
-
-./.venv/bin/python demo1_flat_history.py    # the problem  (red)
-./.venv/bin/python demo2_agent_memory.py    # the fix      (green)
-./.venv/bin/python show_memories.py         # "Memory updated" = SELECT-able rows
-./.venv/bin/python plot_comparison.py       # your own token chart
+python demo1_flat_history.py     # 🔴 the problem — tokens climb 64 → 1,433
+python demo2_agent_memory.py     # 🟢 the fix — stays ≈500, prints the memories
+python show_memories.py          # 🔍 "Memory updated" = SELECT-able rows
+python plot_comparison.py        # 📉 your own token chart
 ```
 
-Full details, config, and a known-limitations section:
+Config, sample output, and known limitations:
 [`agent-memory-use-case/live-demo/README.md`](agent-memory-use-case/live-demo/README.md)
 
 **🖼 How does demo 2 work?** Two ways in:
