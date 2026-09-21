@@ -73,7 +73,7 @@ docker run -d --name oracle26ai \
   -p 1521:1521 \
   -e ORACLE_PWD=Welcome_123 \
   -v oracle26ai-data:/opt/oracle/oradata \
-  container-registry.oracle.com/database/free:23.26.1.0
+  container-registry.oracle.com/database/free:latest
 ```
 
 Then bootstrap and verify it with [`setup_db.sh`](setup_db.sh) (in the repo
