@@ -100,10 +100,33 @@ The demos talk to two small local models through [Ollama](https://ollama.com):
 `llama3.1:8b` answers questions **and** distills memories; `nomic-embed-text`
 turns text into vectors so memories can be found by meaning.
 
-```bash
-brew install ollama                 # macOS (or: ollama.com/download)
-brew services start ollama          # daemon on :11434
+**macOS**
 
+```bash
+brew install ollama
+brew services start ollama          # daemon on :11434, auto-starts on login
+```
+
+**Linux**
+
+```bash
+curl -fsSL https://ollama.com/install.sh | sh
+# installs and starts the systemd service automatically; check with:
+systemctl status ollama
+# no systemd (e.g. WSL2, containers)? run the daemon in its own terminal:
+# ollama serve
+```
+
+**Windows**
+
+Download and run the installer from
+[ollama.com/download/windows](https://ollama.com/download/windows)
+(or `winget install Ollama.Ollama`). Ollama starts automatically and lives in
+the system tray — the same `:11434` API, so no config changes needed.
+
+Then, on every OS, pull the two models:
+
+```bash
 ollama pull llama3.1:8b             # ~5 GB
 ollama pull nomic-embed-text        # ~270 MB
 ```
