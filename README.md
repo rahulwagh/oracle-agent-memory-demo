@@ -36,6 +36,10 @@ is just this:
 
 ## Run it
 
+> 🧰 Fresh machine? Follow the full step-by-step
+> [installation instructions](installation-instructions.md) — Docker image,
+> Ollama models, Python env, smoke tests, troubleshooting.
+
 ```bash
 cd agent-memory-use-case/live-demo
 bash setup_db.sh                       # Oracle AI Database Free (Docker) + demo user
